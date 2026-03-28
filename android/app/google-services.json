@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "864808171743",
+    "project_id": "fitforge-96786",
+    "storage_bucket": "fitforge-96786.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:864808171743:android:24964b45e6a08b79e4916a",
+        "android_client_info": {
+          "package_name": "com.example.fitforge"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "864808171743-06o2hs1eh4dqrb94m05apm58if2hrvl4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fitforge",
+            "certificate_hash": "26eaa97bf6518056f280e4caa0d2e31dcf4a94c4"
+          }
+        },
+        {
+          "client_id": "864808171743-57m9nuhqqvlrfctf2v19bmgh2m4a5i79.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1S5ZjDXbM0Zw0Cz1kTjVDQ3KLpJorr10"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "864808171743-57m9nuhqqvlrfctf2v19bmgh2m4a5i79.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "864808171743-l6qikqn1p2ojr274ue8bll24b26b065b.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fitforge"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

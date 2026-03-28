@@ -1,0 +1,860 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../models/user_model.dart';
+import '../../models/workout_plan.dart';
+import '../../providers/user_provider.dart';
+import '../../screens/workout/workout_session_screen.dart';
+import '../../services/workout_recommendation_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/top_app_bar.dart';
+
+class WorkoutScreen extends StatelessWidget {
+  const WorkoutScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<UserProvider>(
+      builder: (context, userProvider, _) {
+        final profile = userProvider.userProfile;
+        if (profile == null) {
+          return const _WorkoutLoadingState();
+        }
+
+        final recommendation = WorkoutRecommendationService.buildPlan(profile);
+        return _WorkoutContent(profile: profile, recommendation: recommendation);
+      },
+    );
+  }
+}
+
+class _WorkoutContent extends StatefulWidget {
+  final UserModel profile;
+  final WorkoutRecommendation recommendation;
+
+  const _WorkoutContent({
+    required this.profile,
+    required this.recommendation,
+  });
+
+  @override
+  State<_WorkoutContent> createState() => _WorkoutContentState();
+}
+
+class _WorkoutContentState extends State<_WorkoutContent> {
+  late DateTime _selectedDate;
+  double _calendarProgress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedDate = DateTime(now.year, now.month, now.day);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final recommendation = widget.recommendation;
+    final profile = widget.profile;
+    final greetingPrefix = recommendation.greeting.split(',').first.trim();
+    final todaysPlan = _planForDate(_selectedDate);
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 380;
+
+    final weekHeight = isSmallScreen ? 90.0 : 100.0;
+    final monthRowHeight = isSmallScreen ? 54.0 : 58.0;
+    final monthHeaderAreaHeight = isSmallScreen ? 30.0 : 34.0;
+    final monthWeekLabelHeight = isSmallScreen ? 28.0 : 32.0;
+    final monthRowSpacing = 8.0;
+    final monthRows = _monthRowCount(_selectedDate);
+    final monthGridHeight =
+        (monthRows * monthRowHeight) + ((monthRows - 1) * monthRowSpacing);
+    final monthHeight = monthHeaderAreaHeight + monthWeekLabelHeight + monthGridHeight;
+    final visibleCalendarHeight =
+        weekHeight + ((monthHeight - weekHeight) * _calendarProgress);
+
+    return Scaffold(
+      appBar: TopAppBar(
+        title: greetingPrefix,
+        subtitle: profile.name,
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, isSmallScreen ? 112 : 120),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Weekly Focus',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        recommendation.weeklyFocus,
+                        style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: isSmallScreen ? 12 : 13,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _calendarProgress >= 0.5 ? 'Month' : 'Week',
+                  style: TextStyle(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: _MonthHeader(
+                      monthLabel: _monthLabel(_selectedDate),
+                      onPrevious: () {
+                        setState(() {
+                          final previousMonth =
+                              DateTime(_selectedDate.year, _selectedDate.month - 1, 1);
+                          _selectedDate = DateTime(
+                            previousMonth.year,
+                            previousMonth.month,
+                            (_selectedDate.day).clamp(
+                              1,
+                              DateTime(previousMonth.year, previousMonth.month + 1, 0).day,
+                            ),
+                          );
+                        });
+                      },
+                      onNext: () {
+                        setState(() {
+                          final nextMonth =
+                              DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
+                          _selectedDate = DateTime(
+                            nextMonth.year,
+                            nextMonth.month,
+                            (_selectedDate.day).clamp(
+                              1,
+                              DateTime(nextMonth.year, nextMonth.month + 1, 0).day,
+                            ),
+                          );
+                        });
+                      },
+                    ),
+                  ),
+                  ClipRect(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: (visibleCalendarHeight / monthHeight).clamp(0.0, 1.0),
+                      child: SizedBox(
+                        height: monthHeight,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 0,
+                              height: weekHeight,
+                              child: IgnorePointer(
+                                ignoring: _calendarProgress > 0.55,
+                                child: Opacity(
+                                  opacity: (1 - (_calendarProgress * 1.4)).clamp(0.0, 1.0),
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+                                    child: _buildWeekStrip(context),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                ignoring: _calendarProgress < 0.12,
+                                child: Opacity(
+                                  opacity: ((_calendarProgress - 0.08) / 0.92).clamp(0.0, 1.0),
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+                                    child: _buildMonthGrid(
+                                      context,
+                                      rowHeight: monthRowHeight,
+                                      rowSpacing: monthRowSpacing,
+                                      showWeekLabels: true,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onVerticalDragUpdate: (details) {
+                      final delta = details.delta.dy / (monthHeight - weekHeight);
+                      setState(() {
+                        _calendarProgress = (_calendarProgress + delta).clamp(0.0, 1.0);
+                      });
+                    },
+                    onVerticalDragEnd: (_) {
+                      setState(() {
+                        _calendarProgress = _calendarProgress > 0.45 ? 1.0 : 0.0;
+                      });
+                    },
+                    onTap: () {
+                      setState(() {
+                        _calendarProgress = _calendarProgress > 0.5 ? 0.0 : 1.0;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2, bottom: 10),
+                      child: Center(
+                        child: Container(
+                          width: isSmallScreen ? 52 : 56,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.auto_graph, color: colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      recommendation.insight,
+                      style: TextStyle(color: colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your Plan Logic',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 10),
+                  _planReason(context, 'Goal', _goalReason(profile)),
+                  const SizedBox(height: 8),
+                  _planReason(context, 'Lifestyle', _lifestyleReason(profile)),
+                  const SizedBox(height: 8),
+                  _planReason(
+                    context,
+                    'Schedule',
+                    'Your ${profile.workoutDays}-day availability determines the split and recovery balance.',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            _buildWorkoutCard(context, todaysPlan),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Exercise Routine',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Text(
+                  '${todaysPlan.exercises.length} Exercises',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Goal: ${profile.fitnessGoal}  ·  Occupation: ${profile.occupation}',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...todaysPlan.exercises.map(
+              (exercise) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildExerciseRow(context, exercise),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeekStrip(BuildContext context) {
+    final weekDates = List.generate(7, (index) {
+      final monday = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+      return monday.add(Duration(days: index));
+    });
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: weekDates
+          .map(
+            (date) => _CalendarDay(
+              dayLabel: _weekdayLabel(date.weekday - 1),
+              day: date.day,
+              isSelected: _isSameDate(date, _selectedDate),
+              isActive: !_planForDate(date).isRestDay,
+              compact: false,
+              onTap: () => setState(() => _selectedDate = date),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildMonthGrid(
+    BuildContext context, {
+    required double rowHeight,
+    required double rowSpacing,
+    required bool showWeekLabels,
+  }) {
+    final firstDayOfMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
+    final daysInMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+    final leadingBlanks = firstDayOfMonth.weekday - 1;
+    final rowCount = _monthRowCount(_selectedDate);
+    final totalCells = rowCount * 7;
+    final trailingBlanks = totalCells - (leadingBlanks + daysInMonth);
+
+    return Column(
+      children: [
+        if (showWeekLabels) ...[
+          Row(
+            children: const [
+              _CalendarWeekLabel('MON'),
+              _CalendarWeekLabel('TUE'),
+              _CalendarWeekLabel('WED'),
+              _CalendarWeekLabel('THU'),
+              _CalendarWeekLabel('FRI'),
+              _CalendarWeekLabel('SAT'),
+              _CalendarWeekLabel('SUN'),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        SizedBox(
+          height: (rowHeight * rowCount) + ((rowCount - 1) * rowSpacing),
+          child: GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: totalCells,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: rowSpacing,
+              crossAxisSpacing: 4,
+              mainAxisExtent: rowHeight,
+            ),
+            itemBuilder: (context, index) {
+              if (index < leadingBlanks || index >= totalCells - trailingBlanks) {
+                return const SizedBox.shrink();
+              }
+
+              final dayNumber = index - leadingBlanks + 1;
+              final date = DateTime(_selectedDate.year, _selectedDate.month, dayNumber);
+              return _CalendarDay(
+                dayLabel: '',
+                day: dayNumber,
+                isSelected: _isSameDate(date, _selectedDate),
+                isActive: !_planForDate(date).isRestDay,
+                compact: true,
+                onTap: () => setState(() => _selectedDate = date),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  int _monthRowCount(DateTime date) {
+    final firstDay = DateTime(date.year, date.month, 1);
+    final daysInMonth = DateTime(date.year, date.month + 1, 0).day;
+    final leadingBlanks = firstDay.weekday - 1;
+    return ((leadingBlanks + daysInMonth) / 7).ceil();
+  }
+
+  Widget _buildWorkoutCard(BuildContext context, WorkoutDayPlan plan) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    AppTheme.primaryContainer.withValues(alpha: 0.5),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: plan.isRestDay
+                        ? colorScheme.surfaceContainerHighest
+                        : AppTheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: Text(
+                    plan.isRestDay ? "TODAY'S RECOVERY" : "TODAY'S WORKOUT",
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  plan.title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  plan.description,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${plan.exercises.length} exercises  ·  ${plan.durationMinutes} min  ·  ${plan.estimatedCalories} kcal',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: plan.exercises
+                      .map((exercise) => _buildExerciseChip(context, exercise.name))
+                      .toList(),
+                ),
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => WorkoutSessionScreen(plan: plan),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryContainer,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                    ),
+                    child: Text(
+                      plan.isRestDay ? 'Start Recovery ->' : 'Start Workout ->',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _weekdayLabel(int index) {
+    const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    return labels[index];
+  }
+
+  String _monthLabel(DateTime date) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${months[date.month - 1]} ${date.year}';
+  }
+
+  WorkoutDayPlan _planForDate(DateTime date) {
+    return widget.recommendation.weeklyPlan[date.weekday - 1];
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _goalReason(UserModel profile) {
+    switch (profile.fitnessGoal) {
+      case 'Lose Weight':
+        return 'More full-body work and conditioning blocks are used to increase weekly calorie burn.';
+      case 'Gain Muscle':
+        return 'The plan emphasizes split training and moderate rep ranges for progressive overload.';
+      case 'Improve Stamina':
+        return 'The plan adds conditioning-focused sessions and denser work blocks.';
+      default:
+        return 'The plan prioritizes consistency, recovery, and easy-to-follow sessions.';
+    }
+  }
+
+  String _lifestyleReason(UserModel profile) {
+    if (profile.sittingHours == '8+ Hours' || profile.sittingHours == '6-8 Hours') {
+      return 'Because you sit for long hours, extra mobility and posture-friendly moves are included.';
+    }
+    if (profile.occupation == 'Physical Labor') {
+      return 'Because your job is already physically demanding, recovery is protected with smarter spacing.';
+    }
+    return 'Your daily routine supports a balanced mix of strength, conditioning, and recovery.';
+  }
+
+  Widget _planReason(BuildContext context, String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 78,
+          child: Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+              color: colorScheme.primary,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExerciseChip(BuildContext context, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, color: colorScheme.onSurface),
+      ),
+    );
+  }
+
+  Widget _buildExerciseRow(BuildContext context, WorkoutExercise exercise) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.fitness_center, color: Colors.grey),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  exercise.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  exercise.prescription,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  exercise.cue,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.more_vert, color: colorScheme.onSurfaceVariant),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthHeader extends StatelessWidget {
+  final String monthLabel;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  const _MonthHeader({
+    required this.monthLabel,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        IconButton(
+          onPressed: onPrevious,
+          icon: const Icon(Icons.chevron_left),
+          splashRadius: 20,
+        ),
+        Text(
+          monthLabel,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        IconButton(
+          onPressed: onNext,
+          icon: const Icon(Icons.chevron_right),
+          splashRadius: 20,
+          color: colorScheme.onSurface,
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarWeekLabel extends StatelessWidget {
+  final String label;
+
+  const _CalendarWeekLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarDay extends StatelessWidget {
+  final String dayLabel;
+  final int day;
+  final bool isSelected;
+  final bool isActive;
+  final bool compact;
+  final VoidCallback onTap;
+
+  const _CalendarDay({
+    required this.dayLabel,
+    required this.day,
+    required this.isSelected,
+    required this.isActive,
+    required this.compact,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final circleSize = compact ? 32.0 : 36.0;
+    final dayFont = compact ? 15.0 : 16.0;
+    final dotSize = compact ? 5.0 : 6.0;
+    final labelGap = compact ? 0.0 : 8.0;
+    final dotGap = compact ? 6.0 : 8.0;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (dayLabel.isNotEmpty)
+            Text(
+              dayLabel,
+              style: TextStyle(
+                fontSize: 10,
+                color: colorScheme.onSurfaceVariant,
+                letterSpacing: 1.0,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          if (dayLabel.isNotEmpty) SizedBox(height: labelGap),
+          Container(
+            width: circleSize,
+            height: circleSize,
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.primaryContainer : Colors.transparent,
+              shape: BoxShape.circle,
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.primaryContainer.withValues(alpha: 0.2),
+                        spreadRadius: compact ? 2 : 4,
+                      ),
+                    ]
+                  : [],
+            ),
+            child: Center(
+              child: Text(
+                '$day',
+                style: TextStyle(
+                  fontSize: dayFont,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.white : colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: dotGap),
+          Container(
+            width: dotSize,
+            height: dotSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isActive
+                  ? AppTheme.primaryContainer
+                  : colorScheme.surfaceContainerHighest,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutLoadingState extends StatelessWidget {
+  const _WorkoutLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: const TopAppBar(title: 'Good Morning'),
+      body: const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+}
