@@ -9,6 +9,16 @@ class UserModel {
   final String fitnessGoal;
   final int workoutDays;
   final double weight;
+  final double height;
+  final String avatarKey;
+  final String preferredUnits;
+  final String dietaryPreference;
+  final String trainingLevel;
+  final String workoutLocation;
+  final String availableEquipment;
+  final int sessionDurationMinutes;
+  final String targetMuscleFocus;
+  final String jointSensitivity;
   final int streak;
   final bool onboardingComplete;
 
@@ -23,6 +33,16 @@ class UserModel {
     this.fitnessGoal = '',
     this.workoutDays = 3,
     this.weight = 0.0,
+    this.height = 170.0,
+    this.avatarKey = 'person',
+    this.preferredUnits = 'metric',
+    this.dietaryPreference = 'any',
+    this.trainingLevel = 'Beginner',
+    this.workoutLocation = 'Home',
+    this.availableEquipment = 'Bodyweight',
+    this.sessionDurationMinutes = 30,
+    this.targetMuscleFocus = 'Full Body',
+    this.jointSensitivity = 'None',
     this.streak = 0,
     this.onboardingComplete = false,
   });
@@ -38,6 +58,16 @@ class UserModel {
     String? fitnessGoal,
     int? workoutDays,
     double? weight,
+    double? height,
+    String? avatarKey,
+    String? preferredUnits,
+    String? dietaryPreference,
+    String? trainingLevel,
+    String? workoutLocation,
+    String? availableEquipment,
+    int? sessionDurationMinutes,
+    String? targetMuscleFocus,
+    String? jointSensitivity,
     int? streak,
     bool? onboardingComplete,
   }) {
@@ -52,6 +82,17 @@ class UserModel {
       fitnessGoal: fitnessGoal ?? this.fitnessGoal,
       workoutDays: workoutDays ?? this.workoutDays,
       weight: weight ?? this.weight,
+      height: height ?? this.height,
+      avatarKey: avatarKey ?? this.avatarKey,
+      preferredUnits: preferredUnits ?? this.preferredUnits,
+      dietaryPreference: dietaryPreference ?? this.dietaryPreference,
+      trainingLevel: trainingLevel ?? this.trainingLevel,
+      workoutLocation: workoutLocation ?? this.workoutLocation,
+      availableEquipment: availableEquipment ?? this.availableEquipment,
+      sessionDurationMinutes:
+          sessionDurationMinutes ?? this.sessionDurationMinutes,
+      targetMuscleFocus: targetMuscleFocus ?? this.targetMuscleFocus,
+      jointSensitivity: jointSensitivity ?? this.jointSensitivity,
       streak: streak ?? this.streak,
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     );
@@ -69,6 +110,16 @@ class UserModel {
       fitnessGoal: json['fitnessGoal'] ?? '',
       workoutDays: json['workoutDays'] ?? 3,
       weight: (json['weight'] ?? 0.0).toDouble(),
+      height: (json['height'] ?? 170.0).toDouble(),
+      avatarKey: json['avatarKey'] ?? 'person',
+      preferredUnits: json['preferredUnits'] ?? 'metric',
+      dietaryPreference: json['dietaryPreference'] ?? 'any',
+      trainingLevel: json['trainingLevel'] ?? 'Beginner',
+      workoutLocation: json['workoutLocation'] ?? 'Home',
+      availableEquipment: json['availableEquipment'] ?? 'Bodyweight',
+      sessionDurationMinutes: json['sessionDurationMinutes'] ?? 30,
+      targetMuscleFocus: json['targetMuscleFocus'] ?? 'Full Body',
+      jointSensitivity: json['jointSensitivity'] ?? 'None',
       streak: json['streak'] ?? 0,
       onboardingComplete: json['onboardingComplete'] ?? false,
     );
@@ -86,6 +137,16 @@ class UserModel {
       'fitnessGoal': fitnessGoal,
       'workoutDays': workoutDays,
       'weight': weight,
+      'height': height,
+      'avatarKey': avatarKey,
+      'preferredUnits': preferredUnits,
+      'dietaryPreference': dietaryPreference,
+      'trainingLevel': trainingLevel,
+      'workoutLocation': workoutLocation,
+      'availableEquipment': availableEquipment,
+      'sessionDurationMinutes': sessionDurationMinutes,
+      'targetMuscleFocus': targetMuscleFocus,
+      'jointSensitivity': jointSensitivity,
       'streak': streak,
       'onboardingComplete': onboardingComplete,
     };

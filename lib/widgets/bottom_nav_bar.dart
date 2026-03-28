@@ -15,16 +15,21 @@ class BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withOpacity(0.8), // neutral900/80 approximate
+        color: isDark
+            ? const Color(0xD9151B25)
+            : const Color(0xF7FFF9EF),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryContainer.withOpacity(0.06),
-            blurRadius: 40,
-            offset: const Offset(0, -4),
+            color: isDark
+                ? const Color(0x66000000)
+                : AppTheme.primaryContainer.withOpacity(0.08),
+            blurRadius: isDark ? 28 : 32,
+            offset: const Offset(0, -6),
           ),
         ],
       ),
@@ -51,16 +56,10 @@ class BottomNavBar extends StatelessWidget {
                     onTap: () => onTap(1),
                   ),
                   _NavItem(
-                    icon: Icons.groups_outlined,
-                    label: 'COMMUNITY',
-                    isSelected: currentIndex == 2,
-                    onTap: () => onTap(2),
-                  ),
-                  _NavItem(
                     icon: Icons.person_outline,
                     label: 'PROFILE',
-                    isSelected: currentIndex == 3,
-                    onTap: () => onTap(3),
+                    isSelected: currentIndex == 2,
+                    onTap: () => onTap(2),
                   ),
                 ],
               ),

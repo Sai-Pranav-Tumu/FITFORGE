@@ -9,60 +9,117 @@ class AppTheme {
 
   static final TextTheme _textTheme = GoogleFonts.interTextTheme(
     const TextTheme(
-      displayLarge: TextStyle(fontWeight: FontWeight.bold, fontSize: 48, letterSpacing: -0.02 * 48),
-      headlineMedium: TextStyle(fontWeight: FontWeight.bold, fontSize: 26, letterSpacing: -0.01 * 26),
+      displayLarge: TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 48,
+        letterSpacing: -0.02 * 48,
+      ),
+      headlineMedium: TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 26,
+        letterSpacing: -0.01 * 26,
+      ),
       titleLarge: TextStyle(fontWeight: FontWeight.w600, fontSize: 20),
       bodyMedium: TextStyle(fontWeight: FontWeight.w400, fontSize: 14),
-      labelSmall: TextStyle(fontWeight: FontWeight.w500, fontSize: 11, letterSpacing: 2.2),
+      labelSmall: TextStyle(
+        fontWeight: FontWeight.w500,
+        fontSize: 11,
+        letterSpacing: 2.2,
+      ),
     ),
   );
 
   static ThemeData get darkTheme {
+    final scheme = ColorScheme.fromSeed(
+      brightness: Brightness.dark,
+      seedColor: primaryContainer,
+      primary: const Color(0xFFB5C4FF),
+      secondary: secondary,
+      tertiary: tertiary,
+      surface: const Color(0xFF11141A),
+    ).copyWith(
+      primaryContainer: primaryContainer,
+      secondaryContainer: secondaryContainer,
+      tertiaryContainer: const Color(0xFF0D4C39),
+      onSurface: const Color(0xFFE7EBF3),
+      onSurfaceVariant: const Color(0xFFA7B0C0),
+      outline: const Color(0xFF667085),
+      outlineVariant: const Color(0xFF2A3140),
+    );
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      colorScheme: const ColorScheme.dark(
-        surface: Color(0xFF131313),
-        primary: Color(0xFFB5C4FF),
-        primaryContainer: Color(0xFF1A56DB),
-        onPrimary: Color(0xFF00297A),
-        onPrimaryContainer: Color(0xFFD4DCFF),
-        secondary: Color(0xFFFFB690),
-        secondaryContainer: Color(0xFFEC6A06),
-        tertiary: Color(0xFF4EDEA3),
-        tertiaryContainer: Color(0xFF006F4B),
-        onSurface: Color(0xFFE5E2E1),
-        onSurfaceVariant: Color(0xFFC3C5D7),
-        outline: Color(0xFF8D90A0),
-        outlineVariant: Color(0xFF434654),
-        error: Color(0xFFFFB4AB),
-        
-        // Exposing extended surface colors as surface colors dynamically
-        // Using bottom sheet bg instead of surfaceContainerLowest everywhere?
-        // Flutter 3.1x introduced surfaceContainer... properties in ColorScheme in some versions, 
-        // if they are missing, we can implement them via extensions. Because we are on Flutter 3.29, they are supported natively.
+      colorScheme: scheme,
+      scaffoldBackgroundColor: const Color(0xFF0D1016),
+      appBarTheme: const AppBarTheme(
+        foregroundColor: Color(0xFFE7EBF3),
       ),
-      scaffoldBackgroundColor: const Color(0xFF131313),
-      textTheme: _textTheme.apply(bodyColor: const Color(0xFFE5E2E1), displayColor: const Color(0xFFE5E2E1)),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF151A22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shadowColor: Color(0x66000000),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFF171D27),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      dividerColor: const Color(0xFF252D39),
+      textTheme: _textTheme.apply(
+        bodyColor: const Color(0xFFE7EBF3),
+        displayColor: const Color(0xFFE7EBF3),
+      ),
     );
   }
 
   static ThemeData get lightTheme {
+    final scheme = ColorScheme.fromSeed(
+      brightness: Brightness.light,
+      seedColor: primaryContainer,
+      primary: primaryContainer,
+      secondary: secondaryContainer,
+      tertiary: const Color(0xFF129B68),
+      surface: const Color(0xFFFFFBF3),
+    ).copyWith(
+      primaryContainer: const Color(0xFFD7E3FF),
+      secondaryContainer: const Color(0xFFFFE0CC),
+      tertiaryContainer: const Color(0xFFD4F7E8),
+      onSurface: const Color(0xFF152033),
+      onSurfaceVariant: const Color(0xFF5B6472),
+      outline: const Color(0xFF97A3B6),
+      outlineVariant: const Color(0xFFD7DFEA),
+    );
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: const ColorScheme.light(
-        surface: Color(0xFFFFFFFF),
-        primary: Color(0xFF1A56DB),
-        primaryContainer: Color(0xFFDBE1FF),
-        onPrimary: Color(0xFFFFFFFF),
-        onPrimaryContainer: Color(0xFF001257),
-        onSurface: Color(0xFF111827),
-        onSurfaceVariant: Color(0xFF6B7280),
-        outline: Color(0xFF9CA3AF),
+      colorScheme: scheme,
+      scaffoldBackgroundColor: const Color(0xFFF7F1E6),
+      appBarTheme: const AppBarTheme(
+        foregroundColor: Color(0xFF152033),
       ),
-      scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-      textTheme: _textTheme.apply(bodyColor: const Color(0xFF111827), displayColor: const Color(0xFF111827)),
+      cardTheme: CardThemeData(
+        color: const Color(0xFFFFFCF7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shadowColor: Color(0x140F172A),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFFFFFCF7),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      dividerColor: const Color(0xFFE2D8C8),
+      textTheme: _textTheme.apply(
+        bodyColor: const Color(0xFF152033),
+        displayColor: const Color(0xFF152033),
+      ),
     );
   }
 }

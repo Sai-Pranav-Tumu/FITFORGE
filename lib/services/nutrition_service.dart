@@ -230,6 +230,14 @@ class NutritionService {
     return scored.take(limit).map((e) => e.food).toList();
   }
 
+  Future<List<FoodItem>> getAllFoodsForPlanning() async {
+    await initialize();
+    final all = await _getAllFoodsCached();
+    return all
+        .where((f) => f.calories > 1 && f.foodName.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
   Future<void> addMealEntry({
     required String userId,
     required DateTime date,
@@ -863,18 +871,38 @@ class NutritionService {
   Map<String, double> _dailyTargets(UserModel user) {
     final goal = user.fitnessGoal.toLowerCase();
     final isMale = user.gender.toLowerCase() == 'male';
+    final weight = user.weight <= 0 ? 70.0 : user.weight;
+    final height = user.height <= 0 ? 170.0 : user.height;
+    final age = user.age <= 0 ? 25 : user.age;
 
-    var calories = isMale ? 2400.0 : 2000.0;
-    if (goal == 'lose weight') calories -= 350;
-    if (goal == 'gain muscle') calories += 300;
+    final bmr = isMale
+        ? (10 * weight) + (6.25 * height) - (5 * age) + 5
+        : (10 * weight) + (6.25 * height) - (5 * age) - 161;
+    final sitting = user.sittingHours.toLowerCase();
+    double activityMultiplier = 1.375;
+    if (sitting.contains('8') || (sitting.contains('6') && user.workoutDays <= 2)) {
+      activityMultiplier = 1.2;
+    } else if (user.workoutDays >= 5) {
+      activityMultiplier = 1.725;
+    } else if (user.workoutDays >= 3) {
+      activityMultiplier = 1.55;
+    }
+
+    var calories = bmr * activityMultiplier;
+    if (goal == 'lose weight') calories -= 400;
+    if (goal == 'gain muscle') calories += 250;
     if (goal == 'improve stamina') calories += 150;
+    calories = calories.clamp(isMale ? 1500.0 : 1200.0, 4200.0);
 
-    final protein = max(60.0, user.weight <= 0 ? 90.0 : user.weight * 1.6);
+    final proteinMultiplier = goal == 'gain muscle' ? 2.0 : 1.7;
+    final protein = max(60.0, weight * proteinMultiplier);
+    final fat = (calories * (goal == 'lose weight' ? 0.25 : 0.28)) / 9.0;
+    final carbs = max(120.0, (calories - (protein * 4) - (fat * 9)) / 4);
     return <String, double>{
       'caloric_value': calories,
       'protein': protein,
-      'carbohydrates': goal == 'lose weight' ? 220 : 280,
-      'fat': goal == 'lose weight' ? 60 : 75,
+      'carbohydrates': carbs,
+      'fat': fat,
       'dietary_fiber': 30,
       'vitamin_a': 900,
       'vitamin_b1': 1.2,

@@ -8,6 +8,8 @@ class NotificationService {
   static final NotificationService instance = NotificationService._();
 
   static const int hydrationReminderId = 2001;
+  static const int hydrationReminderFollowUpId = 2002;
+  static const int hydrationReminderLateId = 2003;
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -33,15 +35,18 @@ class NotificationService {
   }
 
   Future<void> scheduleHydrationReminder({
+    int id = hydrationReminderId,
     Duration after = const Duration(hours: 2),
+    String title = 'Hydration reminder',
+    String body = 'Time to drink water. Log a glass in FitForge.',
   }) async {
     await initialize();
     final when = tz.TZDateTime.now(tz.local).add(after);
 
     await _plugin.zonedSchedule(
-      hydrationReminderId,
-      'Hydration reminder',
-      'Time to drink water. Log a glass in FitForge.',
+      id,
+      title,
+      body,
       when,
       const NotificationDetails(
         android: AndroidNotificationDetails(
@@ -59,5 +64,7 @@ class NotificationService {
   Future<void> cancelHydrationReminder() async {
     await initialize();
     await _plugin.cancel(hydrationReminderId);
+    await _plugin.cancel(hydrationReminderFollowUpId);
+    await _plugin.cancel(hydrationReminderLateId);
   }
 }

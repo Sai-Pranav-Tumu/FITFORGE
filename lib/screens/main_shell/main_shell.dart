@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../workout/workout_screen.dart';
 import '../calories/calories_screen.dart';
-import '../community/community_screen.dart';
 import '../profile/profile_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -14,14 +13,8 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  int _caloriesTabEpoch = 0;
   late final PageController _pageController;
-
-  final List<Widget> _tabs = const [
-    WorkoutScreen(),
-    CaloriesScreen(),
-    CommunityScreen(),
-    ProfileScreen(),
-  ];
 
   @override
   void initState() {
@@ -37,6 +30,12 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final tabs = <Widget>[
+      const WorkoutScreen(),
+      CaloriesScreen(key: ValueKey<int>(_caloriesTabEpoch)),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       body: Stack(
         children: [
@@ -44,10 +43,13 @@ class _MainShellState extends State<MainShell> {
             controller: _pageController,
             onPageChanged: (index) {
               setState(() {
+                if (_currentIndex == 1 && index != 1) {
+                  _caloriesTabEpoch++;
+                }
                 _currentIndex = index;
               });
             },
-            children: _tabs,
+            children: tabs,
           ),
           
           Positioned(
@@ -58,7 +60,12 @@ class _MainShellState extends State<MainShell> {
               currentIndex: _currentIndex,
               onTap: (index) {
                 if (index == _currentIndex) return;
-                setState(() => _currentIndex = index);
+                setState(() {
+                  if (_currentIndex == 1 && index != 1) {
+                    _caloriesTabEpoch++;
+                  }
+                  _currentIndex = index;
+                });
                 _pageController.animateToPage(
                   index,
                   duration: const Duration(milliseconds: 260),

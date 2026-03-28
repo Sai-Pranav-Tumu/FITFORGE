@@ -85,10 +85,18 @@ class UserProvider extends ChangeNotifier {
     required String name,
     required String gender,
     required int age,
+    required double weight,
     required String occupation,
     required String sittingHours,
     required String fitnessGoal,
     required int workoutDays,
+    double height = 170.0,
+    String trainingLevel = 'Beginner',
+    String workoutLocation = 'Home',
+    String availableEquipment = 'Bodyweight',
+    int sessionDurationMinutes = 30,
+    String targetMuscleFocus = 'Full Body',
+    String jointSensitivity = 'None',
   }) async {
     final existingProfile =
         _userProfile ?? await ensureProfileForUser(user, fallbackName: name);
@@ -97,13 +105,27 @@ class UserProvider extends ChangeNotifier {
       name: name.trim(),
       gender: gender,
       age: age,
+      weight: weight,
       occupation: occupation,
       sittingHours: sittingHours,
       fitnessGoal: fitnessGoal,
       workoutDays: workoutDays,
+      height: height,
+      trainingLevel: trainingLevel,
+      workoutLocation: workoutLocation,
+      availableEquipment: availableEquipment,
+      sessionDurationMinutes: sessionDurationMinutes,
+      targetMuscleFocus: targetMuscleFocus,
+      jointSensitivity: jointSensitivity,
       onboardingComplete: true,
     );
 
+    await _dbService.saveUser(updatedProfile);
+    _userProfile = updatedProfile;
+    notifyListeners();
+  }
+
+  Future<void> updateProfile(UserModel updatedProfile) async {
     await _dbService.saveUser(updatedProfile);
     _userProfile = updatedProfile;
     notifyListeners();

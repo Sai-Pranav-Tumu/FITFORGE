@@ -2,28 +2,39 @@ import 'package:fitforge/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'providers/theme_provider.dart';
 
-// Import screens (to be created)
-import 'screens/splash/splash_screen.dart';
+import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
+import 'providers/user_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/onboarding/onboarding_screen.dart';
+import 'screens/diet_plan/diet_plan_screen.dart';
 import 'screens/generating/generating_screen.dart';
 import 'screens/main_shell/main_shell.dart';
-import 'providers/auth_provider.dart';
-import 'providers/user_provider.dart';
+import 'screens/onboarding/onboarding_screen.dart';
+import 'screens/splash/splash_screen.dart';
 
-class FitForgeApp extends StatelessWidget {
+class FitForgeApp extends StatefulWidget {
   const FitForgeApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+  State<FitForgeApp> createState() => _FitForgeAppState();
+}
+
+class _FitForgeAppState extends State<FitForgeApp> {
+  GoRouter? _router;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _router ??= _buildRouter(context);
+  }
+
+  GoRouter _buildRouter(BuildContext context) {
     final authProvider = context.read<AuthProvider>();
     final userProvider = context.read<UserProvider>();
 
-    final GoRouter router = GoRouter(
+    return GoRouter(
       initialLocation: '/splash',
       refreshListenable: Listenable.merge([authProvider, userProvider]),
       redirect: (context, state) {
@@ -84,9 +95,21 @@ class FitForgeApp extends StatelessWidget {
           path: '/generating',
           builder: (context, state) => const GeneratingScreen(),
         ),
-        GoRoute(path: '/home', builder: (context, state) => const MainShell()),
+        GoRoute(
+          path: '/diet-plan',
+          builder: (context, state) => const DietPlanScreen(),
+        ),
+        GoRoute(
+          path: '/home',
+          builder: (context, state) => const MainShell(),
+        ),
       ],
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp.router(
       title: 'FitForge',
@@ -94,7 +117,7 @@ class FitForgeApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.themeMode,
-      routerConfig: router,
+      routerConfig: _router!,
     );
   }
 }

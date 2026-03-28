@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
+
 import '../../models/workout_plan.dart';
 import '../../theme/app_theme.dart';
 
@@ -89,12 +91,15 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     await SystemSound.play(SystemSoundType.alert);
     if (!mounted) return;
 
-    final shouldAdvance = await showDialog<bool>(
+    final shouldAdvance =
+        await showDialog<bool>(
           context: context,
           barrierDismissible: false,
           builder: (context) {
             return AlertDialog(
-              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHigh,
               title: const Text('Time Complete'),
               content: Text(
                 _exerciseIndex == widget.plan.exercises.length - 1
@@ -165,12 +170,13 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isLastExercise = _exerciseIndex == widget.plan.exercises.length - 1;
     final displayTime = _isCountdownMode ? _countdownSeconds ?? 0 : _elapsedSeconds;
     final progress = (_exerciseIndex + 1) / widget.plan.exercises.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0C1016),
+      backgroundColor: isDark ? const Color(0xFF0C1016) : const Color(0xFFF7F1E6),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 20),
@@ -192,8 +198,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -219,99 +225,100 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               Expanded(
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(30),
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFF162033), Color(0xFF0F141D)],
+                      colors: isDark
+                          ? const [Color(0xFF162033), Color(0xFF0F141D)]
+                          : const [Color(0xFFFFFCF7), Color(0xFFF1E8DA)],
                     ),
                     border: Border.all(
-                      color: AppTheme.primaryContainer.withOpacity(0.16),
+                      color: isDark
+                          ? AppTheme.primaryContainer.withOpacity(0.16)
+                          : const Color(0xFFE6D8C3),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.primaryContainer.withOpacity(0.08),
-                        blurRadius: 36,
+                        color: isDark
+                            ? AppTheme.primaryContainer.withOpacity(0.08)
+                            : const Color(0x140F172A),
+                        blurRadius: isDark ? 36 : 24,
                         offset: const Offset(0, 12),
                       ),
                     ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          _InfoPill(
-                            label: _currentExercise.prescription,
-                            color: AppTheme.primaryContainer,
-                          ),
-                          _InfoPill(
-                            label: _isCountdownMode ? 'Countdown' : 'Stopwatch',
-                            color: AppTheme.secondaryContainer,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        _currentExercise.name,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 360;
+                      return SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                _InfoPill(
+                                  label: _currentExercise.prescription,
+                                  color: AppTheme.primaryContainer,
+                                ),
+                                _InfoPill(
+                                  label: _isCountdownMode ? 'Countdown' : 'Stopwatch',
+                                  color: AppTheme.secondaryContainer,
+                                ),
+                                _InfoPill(
+                                  label: _currentExercise.movementPattern,
+                                  color: AppTheme.tertiary,
+                                ),
+                              ],
                             ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _currentExercise.cue,
-                        style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: 15,
-                          height: 1.35,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Expanded(
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(26),
-                            color: const Color(0xFF0A111A),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.04),
+                            const SizedBox(height: 18),
+                            Text(
+                              _currentExercise.name,
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Lottie.asset(
-                                    _animationAssetForExercise(_currentExercise.name),
-                                    repeat: true,
-                                    animate: true,
-                                    fit: BoxFit.contain,
+                            const SizedBox(height: 8),
+                            Text(
+                              _currentExercise.cue,
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 15,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ..._currentExercise.primaryMuscles.map(
+                                  (muscle) => _TagPill(
+                                    label: muscle,
+                                    color: AppTheme.secondaryContainer,
                                   ),
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: Text(
-                                  'Follow the movement rhythm and keep the form cue in mind.',
-                                  style: TextStyle(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontSize: 12,
+                                ..._currentExercise.secondaryMuscles.take(2).map(
+                                  (muscle) => _TagPill(
+                                    label: muscle,
+                                    color: AppTheme.tertiary,
                                   ),
-                                  textAlign: TextAlign.center,
                                 ),
-                              ),
-                            ],
-                          ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            _ExerciseStage(
+                              exercise: _currentExercise,
+                              compact: compact,
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -319,8 +326,24 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
+                  color: isDark
+                      ? colorScheme.surfaceContainerLow
+                      : const Color(0xFFFFFCF7),
                   borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isDark
+                        ? colorScheme.outlineVariant.withOpacity(0.35)
+                        : const Color(0xFFE4D9C8),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? const Color(0x22000000)
+                          : const Color(0x140F172A),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: Column(
                   children: [
@@ -345,19 +368,23 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                     Text(
                       _formatClock(displayTime),
                       style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                            color: AppTheme.primaryContainer,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 40,
-                          ),
+                        color: AppTheme.primaryContainer,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 40,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Container(
                       height: 56,
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                        color: isDark
+                            ? colorScheme.surfaceContainerHighest.withOpacity(0.5)
+                            : const Color(0xFFF3EDE2),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: colorScheme.outlineVariant.withOpacity(0.35),
+                          color: isDark
+                              ? colorScheme.outlineVariant.withOpacity(0.35)
+                              : const Color(0xFFE0D4C3),
                         ),
                       ),
                       child: Row(
@@ -368,7 +395,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                             enabled: _exerciseIndex != 0,
                             onTap: _goPrevious,
                           ),
-                          _SegmentDivider(color: colorScheme.outlineVariant.withOpacity(0.25)),
+                          _SegmentDivider(
+                            color: colorScheme.outlineVariant.withOpacity(0.25),
+                          ),
                           _SegmentAction(
                             icon: _isRunning ? Icons.pause : Icons.play_arrow,
                             label: _isRunning ? 'Pause' : 'Resume',
@@ -376,7 +405,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                             onTap: _togglePlayback,
                             textColor: AppTheme.primaryContainer,
                           ),
-                          _SegmentDivider(color: colorScheme.outlineVariant.withOpacity(0.25)),
+                          _SegmentDivider(
+                            color: colorScheme.outlineVariant.withOpacity(0.25),
+                          ),
                           _SegmentAction(
                             icon: isLastExercise
                                 ? Icons.check_circle_outline
@@ -398,33 +429,243 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       ),
     );
   }
+}
 
-  String _animationAssetForExercise(String name) {
-    final lower = name.toLowerCase();
-    if (lower.contains('press') ||
-        lower.contains('push') ||
-        lower.contains('dip') ||
-        lower.contains('raise')) {
-      return 'assets/animations/exercise_push.json';
+class _ExerciseStage extends StatelessWidget {
+  final WorkoutExercise exercise;
+  final bool compact;
+
+  const _ExerciseStage({
+    required this.exercise,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final animationCard = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        color: isDark ? const Color(0xFF0A111A) : const Color(0xFFF8F3EA),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFE8DCCB),
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.play_circle_outline_rounded, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                exercise.animationType == 'gif' ? 'Exercise GIF' : 'Motion Preview',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AspectRatio(
+            aspectRatio: compact ? 1.1 : 1.35,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: isDark
+                      ? const [Color(0xFF0E1520), Color(0xFF111A27)]
+                      : const [Color(0xFFFFFFFF), Color(0xFFF1E8DC)],
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: exercise.animationType == 'gif'
+                    ? Image.asset(exercise.animationAsset, fit: BoxFit.contain)
+                    : Lottie.asset(
+                        exercise.animationAsset,
+                        repeat: true,
+                        animate: true,
+                        fit: BoxFit.contain,
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            exercise.animationType == 'gif'
+                ? 'Real movement reference with highlighted working muscles.'
+                : 'Animation placeholder for this movement. We can replace it with a GIF asset later.',
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 12,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final targetCard = _TargetMapCard(exercise: exercise);
+
+    if (compact) {
+      return Column(
+        children: [
+          animationCard,
+          const SizedBox(height: 12),
+          targetCard,
+        ],
+      );
     }
-    if (lower.contains('row') ||
-        lower.contains('pull') ||
-        lower.contains('curl')) {
-      return 'assets/animations/exercise_pull.json';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: 3, child: animationCard),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: targetCard),
+      ],
+    );
+  }
+}
+
+class _TargetMapCard extends StatelessWidget {
+  final WorkoutExercise exercise;
+
+  const _TargetMapCard({required this.exercise});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final highlighted = _highlightedAreas(exercise.bodyMapZones);
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: colorScheme.surfaceContainerLow,
+        border: Border.all(
+          color: colorScheme.outlineVariant.withOpacity(0.28),
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Target Map',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _TargetSection(
+            title: 'Primary',
+            items: exercise.primaryMuscles,
+            color: AppTheme.secondaryContainer,
+          ),
+          const SizedBox(height: 10),
+          _TargetSection(
+            title: 'Support',
+            items: exercise.secondaryMuscles.isEmpty
+                ? const ['Stability']
+                : exercise.secondaryMuscles.take(3).toList(),
+            color: AppTheme.tertiary,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Highlighted Areas',
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: highlighted
+                .map(
+                  (label) => _TagPill(
+                    label: label,
+                    color: AppTheme.primaryContainer,
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _highlightedAreas(List<String> zones) {
+    final labels = <String>{};
+    if (zones.contains('chest')) labels.add('Chest');
+    if (zones.contains('frontShoulders') ||
+        zones.contains('sideShoulders') ||
+        zones.contains('rearShoulders')) {
+      labels.add('Shoulders');
     }
-    if (lower.contains('squat') ||
-        lower.contains('lunge') ||
-        lower.contains('leg') ||
-        lower.contains('step')) {
-      return 'assets/animations/exercise_squat.json';
+    if (zones.contains('upperBack') ||
+        zones.contains('midBack') ||
+        zones.contains('lats') ||
+        zones.contains('lowerBack')) {
+      labels.add('Back');
     }
-    if (lower.contains('plank') ||
-        lower.contains('dead bug') ||
-        lower.contains('hollow') ||
-        lower.contains('core')) {
-      return 'assets/animations/exercise_core.json';
+    if (zones.contains('triceps') ||
+        zones.contains('biceps') ||
+        zones.contains('forearms')) {
+      labels.add('Arms');
     }
-    return 'assets/animations/exercise_cardio.json';
+    if (zones.contains('core')) labels.add('Core');
+    if (zones.contains('quads') || zones.contains('hamstrings') || zones.contains('calves')) {
+      labels.add('Legs');
+    }
+    if (zones.contains('glutes')) labels.add('Glutes');
+    return labels.isEmpty ? <String>['Full Body'] : labels.toList();
+  }
+}
+
+class _TargetSection extends StatelessWidget {
+  final String title;
+  final List<String> items;
+  final Color color;
+
+  const _TargetSection({
+    required this.title,
+    required this.items,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: colorScheme.onSurfaceVariant,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: items
+              .map((item) => _TagPill(label: item, color: color))
+              .toList(),
+        ),
+      ],
+    );
   }
 }
 
@@ -536,6 +777,35 @@ class _InfoPill extends StatelessWidget {
         label,
         style: TextStyle(
           color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _TagPill extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _TagPill({
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
       ),

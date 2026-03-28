@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/nutrition_models.dart';
 import '../../providers/nutrition_provider.dart';
+import '../../providers/user_provider.dart';
 import '../../providers/water_provider.dart';
 import '../../services/nutrition_service.dart';
 import '../../theme/app_theme.dart';
@@ -20,6 +21,9 @@ class CaloriesScreen extends StatefulWidget {
 
 class _CaloriesScreenState extends State<CaloriesScreen> {
   final NutritionService _nutritionService = NutritionService.instance;
+  bool _breakfastExpanded = false;
+  bool _lunchExpanded = false;
+  bool _dinnerExpanded = false;
 
   Future<void> _openAddFood(MealType mealType) async {
     final nutritionProvider = context.read<NutritionProvider>();
@@ -76,7 +80,6 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
                         ),
                       ),
                       Container(
@@ -101,6 +104,8 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                   ),
                   const SizedBox(height: 24),
                   _buildMainCard(context, summary, colorScheme),
+                  const SizedBox(height: 16),
+                  _buildSuggestedFoodsCard(context, summary, colorScheme),
                   const SizedBox(height: 24),
                   _buildMealSection(
                     context,
@@ -108,6 +113,16 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                     icon: Icons.wb_twilight,
                     iconColor: AppTheme.primaryContainer,
                     entries: _mealEntries(summary, MealType.breakfast),
+                    isExpanded: _breakfastExpanded,
+                    onExpansionChanged: (expanded) {
+                      setState(() {
+                        _breakfastExpanded = expanded;
+                        if (expanded) {
+                          _lunchExpanded = false;
+                          _dinnerExpanded = false;
+                        }
+                      });
+                    },
                     onAdd: () => _openAddFood(MealType.breakfast),
                   ),
                   const SizedBox(height: 12),
@@ -117,6 +132,16 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                     icon: Icons.sunny,
                     iconColor: AppTheme.secondaryContainer,
                     entries: _mealEntries(summary, MealType.lunch),
+                    isExpanded: _lunchExpanded,
+                    onExpansionChanged: (expanded) {
+                      setState(() {
+                        _lunchExpanded = expanded;
+                        if (expanded) {
+                          _breakfastExpanded = false;
+                          _dinnerExpanded = false;
+                        }
+                      });
+                    },
                     onAdd: () => _openAddFood(MealType.lunch),
                   ),
                   const SizedBox(height: 12),
@@ -126,6 +151,16 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                     icon: Icons.dark_mode,
                     iconColor: AppTheme.tertiary,
                     entries: _mealEntries(summary, MealType.dinner),
+                    isExpanded: _dinnerExpanded,
+                    onExpansionChanged: (expanded) {
+                      setState(() {
+                        _dinnerExpanded = expanded;
+                        if (expanded) {
+                          _breakfastExpanded = false;
+                          _lunchExpanded = false;
+                        }
+                      });
+                    },
                     onAdd: () => _openAddFood(MealType.dinner),
                   ),
                   const SizedBox(height: 24),
@@ -155,6 +190,9 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
     final protein = summary.totals['protein'] ?? 0;
     final carbs = summary.totals['carbohydrates'] ?? 0;
     final fat = summary.totals['fat'] ?? 0;
+    final proteinTarget = summary.targets['protein'] ?? 0;
+    final carbsTarget = summary.targets['carbohydrates'] ?? 0;
+    final fatTarget = summary.targets['fat'] ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -190,10 +228,10 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                   children: [
                     Text(
                       consumedCalories.toStringAsFixed(0),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 36,
                         fontWeight: FontWeight.w900,
-                        color: Colors.white,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                     Container(
@@ -202,12 +240,25 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                       color: colorScheme.surfaceContainerHighest,
                       margin: const EdgeInsets.symmetric(vertical: 4),
                     ),
-                    Text(
-                      '${targetCalories.toStringAsFixed(0)} kcal',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: colorScheme.onSurfaceVariant,
+                    GestureDetector(
+                      onTap: () => _showTargetInfo(context, summary),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${targetCalories.toStringAsFixed(0)} kcal',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -222,21 +273,21 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
               _buildMacroBar(
                 context,
                 'PROTEIN',
-                '${protein.toStringAsFixed(1)}g',
+                '${protein.toStringAsFixed(1)} / ${proteinTarget.toStringAsFixed(0)}g',
                 _safeFactor(protein, summary.targets['protein'] ?? 1),
                 AppTheme.primaryContainer,
               ),
               _buildMacroBar(
                 context,
                 'CARBS',
-                '${carbs.toStringAsFixed(1)}g',
+                '${carbs.toStringAsFixed(1)} / ${carbsTarget.toStringAsFixed(0)}g',
                 _safeFactor(carbs, summary.targets['carbohydrates'] ?? 1),
                 AppTheme.secondaryContainer,
               ),
               _buildMacroBar(
                 context,
                 'FAT',
-                '${fat.toStringAsFixed(1)}g',
+                '${fat.toStringAsFixed(1)} / ${fatTarget.toStringAsFixed(0)}g',
                 _safeFactor(fat, summary.targets['fat'] ?? 1),
                 AppTheme.tertiary,
               ),
@@ -270,10 +321,10 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
         const SizedBox(height: 4),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 8),
@@ -305,6 +356,8 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
     required IconData icon,
     required Color iconColor,
     required List<MealEntry> entries,
+    required bool isExpanded,
+    required ValueChanged<bool> onExpansionChanged,
     required VoidCallback onAdd,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -318,7 +371,10 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          initiallyExpanded: entries.isNotEmpty,
+          key: PageStorageKey<String>('meal_$title'),
+          initiallyExpanded: isExpanded,
+          maintainState: false,
+          onExpansionChanged: onExpansionChanged,
           title: Row(
             children: [
               Icon(icon, color: iconColor, size: 20),
@@ -531,6 +587,7 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
             children: [
               Expanded(
                 child: _waterButton(
+                  context: context,
                   label: '+250ml',
                   onTap: () => context.read<WaterProvider>().addLiters(0.25),
                 ),
@@ -538,6 +595,7 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: _waterButton(
+                  context: context,
                   label: '+500ml',
                   onTap: () => context.read<WaterProvider>().addLiters(0.50),
                 ),
@@ -545,10 +603,33 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: _waterButton(
+                  context: context,
                   label: '+1L',
                   onTap: () => context.read<WaterProvider>().addLiters(1.0),
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _waterButton(
+                  context: context,
+                  label: '-250ml',
+                  onTap: () => context.read<WaterProvider>().removeLiters(0.25),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _waterButton(
+                  context: context,
+                  label: '-500ml',
+                  onTap: () => context.read<WaterProvider>().removeLiters(0.50),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Spacer(),
             ],
           ),
           if (waterProvider.lastIntakeAt != null) ...[
@@ -558,12 +639,163 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
               style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
             ),
           ],
+          const SizedBox(height: 6),
+          Text(
+            'Daily target adjusts with your body metrics, activity, and season.',
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+          ),
         ],
       ),
     );
   }
 
-  Widget _waterButton({required String label, required VoidCallback onTap}) {
+  Widget _buildSuggestedFoodsCard(
+    BuildContext context,
+    DailyNutritionSummary summary,
+    ColorScheme colorScheme,
+  ) {
+    final preference =
+        context.watch<UserProvider>().userProfile?.dietaryPreference ?? 'any';
+    final suggestions = summary.gaps
+        .expand((gap) => gap.suggestions)
+        .fold<List<FoodItem>>(<FoodItem>[], (list, food) {
+          final alreadyAdded = list.any((item) => item.id == food.id);
+          if (!alreadyAdded) list.add(food);
+          return list;
+        })
+        .where((food) => _matchesDietPreference(food, preference))
+        .take(3)
+        .toList();
+
+    if (suggestions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Today's Suggested Foods",
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Picked from nutrients you are currently behind on.',
+            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          ...suggestions.map(
+            (food) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      food.foodName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    '${food.calories.toStringAsFixed(0)} kcal',
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showTargetInfo(
+    BuildContext context,
+    DailyNutritionSummary summary,
+  ) async {
+    final cs = Theme.of(context).colorScheme;
+    final calories = summary.targets['caloric_value'] ?? 0;
+    final protein = summary.targets['protein'] ?? 0;
+    final carbs = summary.targets['carbohydrates'] ?? 0;
+    final fat = summary.targets['fat'] ?? 0;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Why this target?',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'This daily target is based on your age, sex, height, weight, activity level, and fitness goal.',
+                  style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'We estimate your maintenance calories first, then adjust them for fat loss, muscle gain, stamina, or maintenance.',
+                  style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _targetChip('Calories', '${calories.toStringAsFixed(0)} kcal'),
+                    _targetChip(
+                      'Protein',
+                      '${(summary.totals['protein'] ?? 0).toStringAsFixed(0)} / ${protein.toStringAsFixed(0)}g',
+                    ),
+                    _targetChip(
+                      'Carbs',
+                      '${(summary.totals['carbohydrates'] ?? 0).toStringAsFixed(0)} / ${carbs.toStringAsFixed(0)}g',
+                    ),
+                    _targetChip(
+                      'Fat',
+                      '${(summary.totals['fat'] ?? 0).toStringAsFixed(0)} / ${fat.toStringAsFixed(0)}g',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _waterButton({
+    required BuildContext context,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return ElevatedButton(
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
@@ -572,12 +804,52 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        side: BorderSide(
+          color: AppTheme.primaryContainer.withValues(alpha: 0.22),
+        ),
+        shadowColor: Colors.transparent,
       ),
       child: Text(
         label,
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
+  }
+
+  Widget _targetChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryContainer.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label: $value',
+        style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  bool _matchesDietPreference(FoodItem food, String preference) {
+    if (preference == 'any') return true;
+    final name = food.foodName.toLowerCase();
+    const nonVegKeywords = <String>[
+      'chicken',
+      'mutton',
+      'fish',
+      'prawn',
+      'egg',
+      'beef',
+      'pork',
+      'meat',
+      'tuna',
+      'sardine',
+      'crab',
+      'liver',
+    ];
+    final isNonVeg = nonVegKeywords.any(name.contains);
+    if (preference == 'veg') return !isNonVeg;
+    return isNonVeg;
   }
 
   List<MealEntry> _mealEntries(

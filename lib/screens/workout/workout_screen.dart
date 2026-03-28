@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
 import '../../models/workout_plan.dart';
@@ -118,10 +119,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
             ),
             const SizedBox(height: 14),
             Container(
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(16),
-              ),
+              decoration: _cardDecoration(context),
               child: Column(
                 children: [
                   Padding(
@@ -242,10 +240,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
             const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(16),
-              ),
+              decoration: _cardDecoration(context),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -261,12 +256,11 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               ),
             ),
             const SizedBox(height: 18),
+            _buildPersonalizationOverview(context, profile),
+            const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(16),
-              ),
+              decoration: _cardDecoration(context),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -285,6 +279,15 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                     context,
                     'Schedule',
                     'Your ${profile.workoutDays}-day availability determines the split and recovery balance.',
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push('/diet-plan'),
+                      icon: const Icon(Icons.restaurant_menu_rounded),
+                      label: const Text('Open Diet Plan'),
+                    ),
                   ),
                 ],
               ),
@@ -423,11 +426,26 @@ class _WorkoutContentState extends State<_WorkoutContent> {
 
   Widget _buildWorkoutCard(BuildContext context, WorkoutDayPlan plan) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: isDark ? const Color(0xFF151A22) : const Color(0xFFFFFCF7),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? colorScheme.outlineVariant.withValues(alpha: 0.8)
+              : const Color(0xFFE9DECE),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? const Color(0x33000000)
+                : const Color(0x140F172A),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Stack(
         children: [
@@ -474,10 +492,10 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 const SizedBox(height: 16),
                 Text(
                   plan.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -504,10 +522,32 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                       .map((exercise) => _buildExerciseChip(context, exercise.name))
                       .toList(),
                 ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildMetaChip(
+                      context,
+                      Icons.route_rounded,
+                      plan.exercises.first.movementPattern,
+                    ),
+                    _buildMetaChip(
+                      context,
+                      Icons.bolt_rounded,
+                      plan.exercises.first.difficulty,
+                    ),
+                    _buildMetaChip(
+                      context,
+                      Icons.sports_gymnastics_rounded,
+                      plan.exercises.first.equipment,
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: ElevatedButton(
+                    child: ElevatedButton(
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -624,6 +664,62 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     );
   }
 
+  Widget _buildPersonalizationOverview(BuildContext context, UserModel profile) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(context, radius: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.tune_rounded, color: colorScheme.primary),
+              const SizedBox(width: 10),
+              Text(
+                'Personalized For You',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildMetaChip(context, Icons.fitness_center, profile.trainingLevel),
+              _buildMetaChip(context, Icons.home_work_rounded, profile.workoutLocation),
+              _buildMetaChip(
+                context,
+                Icons.timer_outlined,
+                '${profile.sessionDurationMinutes} min sessions',
+              ),
+              _buildMetaChip(
+                context,
+                Icons.track_changes_rounded,
+                profile.targetMuscleFocus,
+              ),
+              _buildMetaChip(
+                context,
+                Icons.handyman_rounded,
+                profile.availableEquipment,
+              ),
+              _buildMetaChip(
+                context,
+                Icons.health_and_safety_outlined,
+                profile.jointSensitivity == 'None'
+                    ? 'No joint limits'
+                    : '${profile.jointSensitivity} care',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildExerciseChip(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
@@ -639,15 +735,39 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     );
   }
 
+  Widget _buildMetaChip(BuildContext context, IconData icon, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildExerciseRow(BuildContext context, WorkoutExercise exercise) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: _cardDecoration(context),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 64,
@@ -656,7 +776,10 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.fitness_center, color: Colors.grey),
+            child: Icon(
+              _exerciseIcon(exercise.movementPattern),
+              color: colorScheme.primary,
+            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -688,12 +811,78 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    ...exercise.primaryMuscles.take(2).map(
+                          (muscle) => _miniChip(
+                            context,
+                            muscle,
+                            AppTheme.secondaryContainer,
+                          ),
+                        ),
+                    _miniChip(context, exercise.equipment, AppTheme.primaryContainer),
+                  ],
+                ),
               ],
             ),
           ),
           Icon(Icons.more_vert, color: colorScheme.onSurfaceVariant),
         ],
       ),
+    );
+  }
+
+  Widget _miniChip(BuildContext context, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  IconData _exerciseIcon(String movementPattern) {
+    final lower = movementPattern.toLowerCase();
+    if (lower.contains('push')) return Icons.north_rounded;
+    if (lower.contains('pull')) return Icons.south_rounded;
+    if (lower.contains('squat') || lower.contains('lunge')) {
+      return Icons.accessibility_new_rounded;
+    }
+    if (lower.contains('core') || lower.contains('carry')) {
+      return Icons.blur_circular_rounded;
+    }
+    if (lower.contains('condition')) return Icons.bolt_rounded;
+    return Icons.fitness_center;
+  }
+
+  BoxDecoration _cardDecoration(BuildContext context, {double radius = 16}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return BoxDecoration(
+      color: colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: colorScheme.outlineVariant.withValues(alpha: isDark ? 0.24 : 0.32),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: isDark ? const Color(0x22000000) : const Color(0x120F172A),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
     );
   }
 }

@@ -8,6 +8,7 @@ import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
 import 'providers/nutrition_provider.dart';
 import 'providers/water_provider.dart';
+import 'providers/diet_plan_provider.dart';
 import 'services/nutrition_service.dart';
 import 'services/notification_service.dart';
 
@@ -42,11 +43,19 @@ void main() async {
             return provider;
           },
         ),
-        ChangeNotifierProxyProvider<AuthProvider, WaterProvider>(
+        ChangeNotifierProxyProvider2<AuthProvider, UserProvider, WaterProvider>(
           create: (_) => WaterProvider(),
-          update: (_, authProvider, waterProvider) {
+          update: (_, authProvider, userProvider, waterProvider) {
             final provider = waterProvider ?? WaterProvider();
-            provider.sync(authProvider.user);
+            provider.sync(authProvider.user, userProvider.userProfile);
+            return provider;
+          },
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, DietPlanProvider>(
+          create: (_) => DietPlanProvider(),
+          update: (_, authProvider, dietPlanProvider) {
+            final provider = dietPlanProvider ?? DietPlanProvider();
+            provider.sync(authProvider.user?.uid);
             return provider;
           },
         ),

@@ -12,6 +12,7 @@ class DarkModeToggle extends StatelessWidget {
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
     final colorScheme = Theme.of(context).colorScheme;
+    final darkSurface = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       onTap: () {
@@ -25,8 +26,15 @@ class DarkModeToggle extends StatelessWidget {
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHigh.withOpacity(0.4),
+              color: darkSurface
+                  ? const Color(0xFF222A37).withOpacity(0.9)
+                  : const Color(0xFFF4EBDC).withOpacity(0.96),
               borderRadius: BorderRadius.circular(50),
+              border: Border.all(
+                color: darkSurface
+                    ? colorScheme.outlineVariant.withValues(alpha: 0.9)
+                    : const Color(0xFFE1D5C3),
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -50,12 +58,15 @@ class DarkModeToggle extends StatelessWidget {
   }
 
   Widget _buildToggleButton({required IconData icon, required bool isActive, required ColorScheme colorScheme}) {
+    final darkSurface = colorScheme.brightness == Brightness.dark;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: isActive ? AppTheme.primaryContainer : Colors.transparent,
+        color: isActive
+            ? AppTheme.primaryContainer
+            : (darkSurface ? const Color(0x00000000) : const Color(0xFFF9F4EA)),
         shape: BoxShape.circle,
       ),
       child: Icon(

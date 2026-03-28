@@ -17,23 +17,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   final TextEditingController _nameController = TextEditingController();
   late final FixedExtentScrollController _ageController;
+  late final FixedExtentScrollController _heightController;
+  late final FixedExtentScrollController _weightController;
 
   int _currentIndex = 0;
   bool _isSaving = false;
 
   String? _gender;
   int _age = 25;
+  double _height = 170;
+  double _weight = 70;
   String? _occupation;
   String? _sittingHours;
   String? _fitnessGoal;
   int? _workoutDays;
+  String? _trainingLevel;
+  String? _workoutLocation;
+  String? _availableEquipment;
+  int? _sessionDurationMinutes;
+  String? _targetMuscleFocus;
+  String? _jointSensitivity;
 
-  static const int _totalQuestions = 7;
+  static const int _totalQuestions = 15;
 
   @override
   void initState() {
     super.initState();
     _ageController = FixedExtentScrollController(initialItem: _age - 15);
+    _heightController = FixedExtentScrollController(
+      initialItem: _height.toInt() - 120,
+    );
+    _weightController = FixedExtentScrollController(
+      initialItem: _weight.toInt() - 30,
+    );
   }
 
   void _nextPage() {
@@ -83,10 +99,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             name: _nameController.text.trim(),
             gender: _gender!,
             age: _age,
+            weight: _weight,
             occupation: _occupation!,
             sittingHours: _sittingHours!,
             fitnessGoal: _fitnessGoal!,
             workoutDays: _workoutDays!,
+            height: _height,
+            trainingLevel: _trainingLevel ?? 'Beginner',
+            workoutLocation: _workoutLocation ?? 'Home',
+            availableEquipment: _availableEquipment ?? 'Bodyweight',
+            sessionDurationMinutes: _sessionDurationMinutes ?? 30,
+            targetMuscleFocus: _targetMuscleFocus ?? 'Full Body',
+            jointSensitivity: _jointSensitivity ?? 'None',
           );
 
       if (!mounted) return;
@@ -111,6 +135,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _pageController.dispose();
     _nameController.dispose();
     _ageController.dispose();
+    _heightController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
@@ -194,6 +220,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       onSelected: (value) => setState(() => _gender = value),
                     ),
                     _buildAgeQuestion(context),
+                    _buildMetricWheelQuestion(
+                      context,
+                      title: 'What is your height?',
+                      subtitle:
+                          'Height helps us calculate BMR, calories, and a more accurate diet plan.',
+                      value: _height.toInt(),
+                      unit: 'cm',
+                      min: 120,
+                      max: 230,
+                      controller: _heightController,
+                      onChanged: (value) => setState(() => _height = value.toDouble()),
+                    ),
+                    _buildMetricWheelQuestion(
+                      context,
+                      title: 'What is your weight?',
+                      subtitle:
+                          'Weight helps us personalize calorie targets, protein intake, and progress guidance.',
+                      value: _weight.toInt(),
+                      unit: 'kg',
+                      min: 30,
+                      max: 200,
+                      controller: _weightController,
+                      onChanged: (value) => setState(() => _weight = value.toDouble()),
+                    ),
                     _buildChoiceQuestion(
                       context,
                       title: 'What describes your daily occupation?',
@@ -251,6 +301,120 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption('Stay Active', '🧘'),
                       ],
                       onSelected: (value) => setState(() => _fitnessGoal = value),
+                    ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'What is your current training level?',
+                      subtitle:
+                          'This lets us choose safer exercise variations and realistic weekly intensity.',
+                      selectedValue: _trainingLevel,
+                      options: const [
+                        _ChoiceOption(
+                          'Beginner',
+                          '🌱',
+                          subtitle: 'New to structured workouts or returning after a break',
+                        ),
+                        _ChoiceOption(
+                          'Intermediate',
+                          '⚡',
+                          subtitle: 'Comfortable with regular workouts and basic form',
+                        ),
+                        _ChoiceOption(
+                          'Advanced',
+                          '🔥',
+                          subtitle: 'Experienced with higher volume and harder variations',
+                        ),
+                      ],
+                      onSelected: (value) => setState(() => _trainingLevel = value),
+                    ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'Where do you mostly work out?',
+                      subtitle:
+                          'Your workout location changes the kind of exercises we can suggest.',
+                      selectedValue: _workoutLocation,
+                      options: const [
+                        _ChoiceOption('Home', '🏠'),
+                        _ChoiceOption('Gym', '🏋'),
+                        _ChoiceOption('Hybrid', '🔁'),
+                      ],
+                      onSelected: (value) => setState(() => _workoutLocation = value),
+                    ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'What equipment do you usually have?',
+                      subtitle:
+                          'We use this to avoid suggesting exercises you cannot actually perform.',
+                      selectedValue: _availableEquipment,
+                      options: const [
+                        _ChoiceOption(
+                          'Bodyweight',
+                          '🤸',
+                          subtitle: 'No equipment or only a mat/chair',
+                        ),
+                        _ChoiceOption(
+                          'Bands & Dumbbells',
+                          '🟦',
+                          subtitle: 'Resistance bands or a light dumbbell setup',
+                        ),
+                        _ChoiceOption(
+                          'Full Gym',
+                          '🏟',
+                          subtitle: 'Machines, barbells, benches, and cables',
+                        ),
+                      ],
+                      onSelected: (value) =>
+                          setState(() => _availableEquipment = value),
+                    ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'How long should most sessions be?',
+                      subtitle:
+                          'We match the workout density to the time you can realistically give.',
+                      selectedValue: _sessionDurationMinutes == null
+                          ? null
+                          : '${_sessionDurationMinutes!} min',
+                      options: const [
+                        _ChoiceOption('20 min', '⏱'),
+                        _ChoiceOption('30 min', '⌚'),
+                        _ChoiceOption('45 min', '🕒'),
+                        _ChoiceOption('60 min', '🧭'),
+                      ],
+                      onSelected: (value) => setState(
+                        () => _sessionDurationMinutes =
+                            int.tryParse(value.split(' ').first) ?? 30,
+                      ),
+                    ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'Which area do you want to emphasize most?',
+                      subtitle:
+                          'This gives your weekly plan a visible personal focus without ignoring balance.',
+                      selectedValue: _targetMuscleFocus,
+                      options: const [
+                        _ChoiceOption('Full Body', '🧍'),
+                        _ChoiceOption('Upper Body', '💪'),
+                        _ChoiceOption('Lower Body', '🦵'),
+                        _ChoiceOption('Core', '⚙'),
+                        _ChoiceOption('Back & Posture', '🧠'),
+                      ],
+                      onSelected: (value) =>
+                          setState(() => _targetMuscleFocus = value),
+                    ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'Any joints or areas we should be extra careful with?',
+                      subtitle:
+                          'We use this to reduce risky movements and add more friendly alternatives.',
+                      selectedValue: _jointSensitivity,
+                      options: const [
+                        _ChoiceOption('None', '✅'),
+                        _ChoiceOption('Knees', '🦵'),
+                        _ChoiceOption('Lower Back', '🩻'),
+                        _ChoiceOption('Shoulders', '🫳'),
+                      ],
+                      onSelected: (value) =>
+                          setState(() => _jointSensitivity = value),
                     ),
                     _buildWorkoutDaysQuestion(context),
                   ],
@@ -435,6 +599,94 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           color: isSelected
                               ? colorScheme.onSurface
                               : colorScheme.onSurfaceVariant.withOpacity(0.5),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricWheelQuestion(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required int value,
+    required String unit,
+    required int min,
+    required int max,
+    required FixedExtentScrollController controller,
+    required ValueChanged<int> onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return _buildQuestionScaffold(
+      context: context,
+      title: title,
+      subtitle: subtitle,
+      canContinue: true,
+      body: Center(
+        child: SizedBox(
+          height: 280,
+          width: 180,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                height: 64,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryContainer.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppTheme.primaryContainer.withOpacity(0.4),
+                    width: 2,
+                  ),
+                ),
+              ),
+              ListWheelScrollView.useDelegate(
+                controller: controller,
+                itemExtent: 60,
+                physics: const FixedExtentScrollPhysics(),
+                perspective: 0.005,
+                onSelectedItemChanged: (index) => onChanged(min + index),
+                childDelegate: ListWheelChildBuilderDelegate(
+                  childCount: max - min + 1,
+                  builder: (context, index) {
+                    final current = min + index;
+                    final isSelected = current == value;
+                    return Center(
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '$current',
+                              style: TextStyle(
+                                fontSize: isSelected ? 34 : 26,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? colorScheme.onSurface
+                                    : colorScheme.onSurfaceVariant.withOpacity(0.5),
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' $unit',
+                              style: TextStyle(
+                                fontSize: isSelected ? 16 : 14,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
+                                    ? AppTheme.primaryContainer
+                                    : colorScheme.onSurfaceVariant.withOpacity(0.5),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     );
