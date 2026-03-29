@@ -43,7 +43,8 @@ class WaterProvider extends ChangeNotifier {
       } else {
         load();
       }
-    } else if (_authUser != null && (_lastIntakeAt == null || _profile != profile)) {
+    } else if (_authUser != null &&
+        (_lastIntakeAt == null || _profile != profile)) {
       load();
     } else if (_authUser != null) {
       final newGoal = _computeGoalLiters();
@@ -72,8 +73,8 @@ class WaterProvider extends ChangeNotifier {
     _events = rawEvents == null || rawEvents.isEmpty
         ? <_WaterEvent>[]
         : (jsonDecode(rawEvents) as List<dynamic>)
-            .map((item) => _WaterEvent.fromJson(item as Map<String, dynamic>))
-            .toList();
+              .map((item) => _WaterEvent.fromJson(item as Map<String, dynamic>))
+              .toList();
     final ts = prefs.getInt(_key('water_last_ts'));
     _lastIntakeAt = _events.isNotEmpty
         ? _events.last.at
@@ -83,7 +84,6 @@ class WaterProvider extends ChangeNotifier {
     notifyListeners();
 
     _startDayRolloverMonitor();
-    await NotificationService.instance.requestPermissionIfNeeded();
     await _rescheduleReminder();
   }
 
@@ -113,7 +113,10 @@ class WaterProvider extends ChangeNotifier {
         remainingToRemove -= last.liters;
       }
     }
-    _consumedLiters = _events.fold<double>(0, (sum, event) => sum + event.liters);
+    _consumedLiters = _events.fold<double>(
+      0,
+      (sum, event) => sum + event.liters,
+    );
     _lastIntakeAt = _events.isEmpty ? null : _events.last.at;
     await _save();
     notifyListeners();
@@ -141,6 +144,12 @@ class WaterProvider extends ChangeNotifier {
     await _rescheduleReminder();
   }
 
+  Future<void> requestReminderPermissionIfNeeded() async {
+    if (_authUser == null || !_remindersEnabled) return;
+    await NotificationService.instance.requestPermissionIfNeeded();
+    await _rescheduleReminder();
+  }
+
   Future<void> _save() async {
     if (_authUser == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -165,7 +174,9 @@ class WaterProvider extends ChangeNotifier {
     if (!_remindersEnabled) return;
     final now = DateTime.now();
     final anchor = _lastIntakeAt ?? now;
-    final firstReminder = anchor.add(Duration(minutes: _reminderIntervalMinutes));
+    final firstReminder = anchor.add(
+      Duration(minutes: _reminderIntervalMinutes),
+    );
     final secondReminder = anchor.add(
       Duration(minutes: _reminderIntervalMinutes * 2),
     );
@@ -246,18 +257,15 @@ class _WaterEvent {
   final DateTime at;
   final double liters;
 
-  const _WaterEvent({
-    required this.at,
-    required this.liters,
-  });
+  const _WaterEvent({required this.at, required this.liters});
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'at': at.millisecondsSinceEpoch,
-        'liters': liters,
-      };
+    'at': at.millisecondsSinceEpoch,
+    'liters': liters,
+  };
 
   factory _WaterEvent.fromJson(Map<String, dynamic> json) => _WaterEvent(
-        at: DateTime.fromMillisecondsSinceEpoch(json['at'] as int),
-        liters: (json['liters'] as num).toDouble(),
-      );
+    at: DateTime.fromMillisecondsSinceEpoch(json['at'] as int),
+    liters: (json['liters'] as num).toDouble(),
+  );
 }

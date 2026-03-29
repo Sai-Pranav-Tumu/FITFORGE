@@ -1,11 +1,13 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../models/user_model.dart';
 import '../../models/workout_plan.dart';
+import '../../providers/workout_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../screens/workout/workout_session_screen.dart';
-import '../../services/workout_recommendation_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/top_app_bar.dart';
 
@@ -14,15 +16,43 @@ class WorkoutScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<UserProvider>(
-      builder: (context, userProvider, _) {
+    return Consumer2<UserProvider, WorkoutProvider>(
+      builder: (context, userProvider, workoutProvider, _) {
         final profile = userProvider.userProfile;
-        if (profile == null) {
+        if (profile == null ||
+            (workoutProvider.loading &&
+                workoutProvider.recommendation == null)) {
           return const _WorkoutLoadingState();
         }
 
-        final recommendation = WorkoutRecommendationService.buildPlan(profile);
-        return _WorkoutContent(profile: profile, recommendation: recommendation);
+        if (!workoutProvider.hasExercises ||
+            (workoutProvider.syncingLibrary &&
+                !workoutProvider.hasFullDataset)) {
+          return _WorkoutDownloadPrompt(
+            syncingLibrary: workoutProvider.syncingLibrary,
+            errorMessage: workoutProvider.error,
+            shouldShowPrompt: workoutProvider.shouldShowDownloadPrompt,
+            downloadProgress: workoutProvider.downloadProgress,
+            downloadPhase: workoutProvider.downloadPhase,
+            downloadPhaseMessage: workoutProvider.downloadPhaseMessage,
+            onDownload: workoutProvider.acceptExerciseLibraryDownload,
+            onSkip: workoutProvider.declineExerciseLibraryDownload,
+          );
+        }
+
+        if (workoutProvider.recommendation == null) {
+          return const _WorkoutLoadingState();
+        }
+
+        return _WorkoutContent(
+          profile: profile,
+          recommendation: workoutProvider.recommendation!,
+          usingStarterPack: workoutProvider.usingStarterPack,
+          syncingLibrary: workoutProvider.syncingLibrary,
+          downloadProgress: workoutProvider.downloadProgress,
+          downloadPhase: workoutProvider.downloadPhase,
+          downloadPhaseMessage: workoutProvider.downloadPhaseMessage,
+        );
       },
     );
   }
@@ -31,10 +61,20 @@ class WorkoutScreen extends StatelessWidget {
 class _WorkoutContent extends StatefulWidget {
   final UserModel profile;
   final WorkoutRecommendation recommendation;
+  final bool usingStarterPack;
+  final bool syncingLibrary;
+  final double downloadProgress;
+  final String downloadPhase;
+  final String downloadPhaseMessage;
 
   const _WorkoutContent({
     required this.profile,
     required this.recommendation,
+    required this.usingStarterPack,
+    required this.syncingLibrary,
+    required this.downloadProgress,
+    required this.downloadPhase,
+    required this.downloadPhaseMessage,
   });
 
   @override
@@ -71,15 +111,13 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     final monthRows = _monthRowCount(_selectedDate);
     final monthGridHeight =
         (monthRows * monthRowHeight) + ((monthRows - 1) * monthRowSpacing);
-    final monthHeight = monthHeaderAreaHeight + monthWeekLabelHeight + monthGridHeight;
+    final monthHeight =
+        monthHeaderAreaHeight + monthWeekLabelHeight + monthGridHeight;
     final visibleCalendarHeight =
         weekHeight + ((monthHeight - weekHeight) * _calendarProgress);
 
     return Scaffold(
-      appBar: TopAppBar(
-        title: greetingPrefix,
-        subtitle: profile.name,
-      ),
+      appBar: TopAppBar(title: greetingPrefix, subtitle: profile.name),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, isSmallScreen ? 112 : 120),
         child: Column(
@@ -128,28 +166,42 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                       monthLabel: _monthLabel(_selectedDate),
                       onPrevious: () {
                         setState(() {
-                          final previousMonth =
-                              DateTime(_selectedDate.year, _selectedDate.month - 1, 1);
+                          final previousMonth = DateTime(
+                            _selectedDate.year,
+                            _selectedDate.month - 1,
+                            1,
+                          );
                           _selectedDate = DateTime(
                             previousMonth.year,
                             previousMonth.month,
                             (_selectedDate.day).clamp(
                               1,
-                              DateTime(previousMonth.year, previousMonth.month + 1, 0).day,
+                              DateTime(
+                                previousMonth.year,
+                                previousMonth.month + 1,
+                                0,
+                              ).day,
                             ),
                           );
                         });
                       },
                       onNext: () {
                         setState(() {
-                          final nextMonth =
-                              DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
+                          final nextMonth = DateTime(
+                            _selectedDate.year,
+                            _selectedDate.month + 1,
+                            1,
+                          );
                           _selectedDate = DateTime(
                             nextMonth.year,
                             nextMonth.month,
                             (_selectedDate.day).clamp(
                               1,
-                              DateTime(nextMonth.year, nextMonth.month + 1, 0).day,
+                              DateTime(
+                                nextMonth.year,
+                                nextMonth.month + 1,
+                                0,
+                              ).day,
                             ),
                           );
                         });
@@ -159,7 +211,10 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                   ClipRect(
                     child: Align(
                       alignment: Alignment.topCenter,
-                      heightFactor: (visibleCalendarHeight / monthHeight).clamp(0.0, 1.0),
+                      heightFactor: (visibleCalendarHeight / monthHeight).clamp(
+                        0.0,
+                        1.0,
+                      ),
                       child: SizedBox(
                         height: monthHeight,
                         child: Stack(
@@ -172,9 +227,15 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                               child: IgnorePointer(
                                 ignoring: _calendarProgress > 0.55,
                                 child: Opacity(
-                                  opacity: (1 - (_calendarProgress * 1.4)).clamp(0.0, 1.0),
+                                  opacity: (1 - (_calendarProgress * 1.4))
+                                      .clamp(0.0, 1.0),
                                   child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      2,
+                                      10,
+                                      0,
+                                    ),
                                     child: _buildWeekStrip(context),
                                   ),
                                 ),
@@ -184,9 +245,15 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                               child: IgnorePointer(
                                 ignoring: _calendarProgress < 0.12,
                                 child: Opacity(
-                                  opacity: ((_calendarProgress - 0.08) / 0.92).clamp(0.0, 1.0),
+                                  opacity: ((_calendarProgress - 0.08) / 0.92)
+                                      .clamp(0.0, 1.0),
                                   child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      10,
+                                      2,
+                                      10,
+                                      0,
+                                    ),
                                     child: _buildMonthGrid(
                                       context,
                                       rowHeight: monthRowHeight,
@@ -205,14 +272,20 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onVerticalDragUpdate: (details) {
-                      final delta = details.delta.dy / (monthHeight - weekHeight);
+                      final delta =
+                          details.delta.dy / (monthHeight - weekHeight);
                       setState(() {
-                        _calendarProgress = (_calendarProgress + delta).clamp(0.0, 1.0);
+                        _calendarProgress = (_calendarProgress + delta).clamp(
+                          0.0,
+                          1.0,
+                        );
                       });
                     },
                     onVerticalDragEnd: (_) {
                       setState(() {
-                        _calendarProgress = _calendarProgress > 0.45 ? 1.0 : 0.0;
+                        _calendarProgress = _calendarProgress > 0.45
+                            ? 1.0
+                            : 0.0;
                       });
                     },
                     onTap: () {
@@ -227,7 +300,9 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                           width: isSmallScreen ? 52 : 56,
                           height: 5,
                           decoration: BoxDecoration(
-                            color: colorScheme.outlineVariant.withValues(alpha: 0.7),
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.7,
+                            ),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -238,24 +313,37 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               ),
             ),
             const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: _cardDecoration(context),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.auto_graph, color: colorScheme.primary),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      recommendation.insight,
-                      style: TextStyle(color: colorScheme.onSurfaceVariant),
-                    ),
-                  ),
-                ],
+            if (widget.syncingLibrary) ...[
+              _DownloadProgressPanel(
+                progress: widget.downloadProgress,
+                phase: widget.downloadPhase,
+                message: widget.downloadPhaseMessage,
+                compact: true,
               ),
-            ),
-            const SizedBox(height: 18),
+              const SizedBox(height: 18),
+            ] else if (widget.usingStarterPack) ...[
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: _cardDecoration(context),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.cloud_download_outlined,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'A local exercise dataset is currently active. The full library will appear automatically after sync completes.',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+            ],
             _buildPersonalizationOverview(context, profile),
             const SizedBox(height: 18),
             Container(
@@ -267,8 +355,8 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                   Text(
                     'Your Plan Logic',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   _planReason(context, 'Goal', _goalReason(profile)),
@@ -279,15 +367,6 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                     context,
                     'Schedule',
                     'Your ${profile.workoutDays}-day availability determines the split and recovery balance.',
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => context.push('/diet-plan'),
-                      icon: const Icon(Icons.restaurant_menu_rounded),
-                      label: const Text('Open Diet Plan'),
-                    ),
                   ),
                 ],
               ),
@@ -334,7 +413,9 @@ class _WorkoutContentState extends State<_WorkoutContent> {
 
   Widget _buildWeekStrip(BuildContext context) {
     final weekDates = List.generate(7, (index) {
-      final monday = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+      final monday = _selectedDate.subtract(
+        Duration(days: _selectedDate.weekday - 1),
+      );
       return monday.add(Duration(days: index));
     });
 
@@ -361,8 +442,16 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     required double rowSpacing,
     required bool showWeekLabels,
   }) {
-    final firstDayOfMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
-    final daysInMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+    final firstDayOfMonth = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      1,
+    );
+    final daysInMonth = DateTime(
+      _selectedDate.year,
+      _selectedDate.month + 1,
+      0,
+    ).day;
     final leadingBlanks = firstDayOfMonth.weekday - 1;
     final rowCount = _monthRowCount(_selectedDate);
     final totalCells = rowCount * 7;
@@ -396,12 +485,17 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               mainAxisExtent: rowHeight,
             ),
             itemBuilder: (context, index) {
-              if (index < leadingBlanks || index >= totalCells - trailingBlanks) {
+              if (index < leadingBlanks ||
+                  index >= totalCells - trailingBlanks) {
                 return const SizedBox.shrink();
               }
 
               final dayNumber = index - leadingBlanks + 1;
-              final date = DateTime(_selectedDate.year, _selectedDate.month, dayNumber);
+              final date = DateTime(
+                _selectedDate.year,
+                _selectedDate.month,
+                dayNumber,
+              );
               return _CalendarDay(
                 dayLabel: '',
                 day: dayNumber,
@@ -439,9 +533,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
         ),
         boxShadow: [
           BoxShadow(
-            color: isDark
-                ? const Color(0x33000000)
-                : const Color(0x140F172A),
+            color: isDark ? const Color(0x33000000) : const Color(0x140F172A),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -472,7 +564,10 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: plan.isRestDay
                         ? colorScheme.surfaceContainerHighest
@@ -519,7 +614,10 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                   spacing: 8,
                   runSpacing: 8,
                   children: plan.exercises
-                      .map((exercise) => _buildExerciseChip(context, exercise.name))
+                      .map(
+                        (exercise) =>
+                            _buildExerciseChip(context, exercise.name),
+                      )
                       .toList(),
                 ),
                 const SizedBox(height: 14),
@@ -547,7 +645,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 const SizedBox(height: 24),
                 Align(
                   alignment: Alignment.centerRight,
-                    child: ElevatedButton(
+                  child: ElevatedButton(
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -628,7 +726,8 @@ class _WorkoutContentState extends State<_WorkoutContent> {
   }
 
   String _lifestyleReason(UserModel profile) {
-    if (profile.sittingHours == '8+ Hours' || profile.sittingHours == '6-8 Hours') {
+    if (profile.sittingHours == '8+ Hours' ||
+        profile.sittingHours == '6-8 Hours') {
       return 'Because you sit for long hours, extra mobility and posture-friendly moves are included.';
     }
     if (profile.occupation == 'Physical Labor') {
@@ -664,7 +763,10 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     );
   }
 
-  Widget _buildPersonalizationOverview(BuildContext context, UserModel profile) {
+  Widget _buildPersonalizationOverview(
+    BuildContext context,
+    UserModel profile,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
@@ -678,9 +780,9 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               const SizedBox(width: 10),
               Text(
                 'Personalized For You',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
             ],
           ),
@@ -689,8 +791,16 @@ class _WorkoutContentState extends State<_WorkoutContent> {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _buildMetaChip(context, Icons.fitness_center, profile.trainingLevel),
-              _buildMetaChip(context, Icons.home_work_rounded, profile.workoutLocation),
+              _buildMetaChip(
+                context,
+                Icons.fitness_center,
+                profile.trainingLevel,
+              ),
+              _buildMetaChip(
+                context,
+                Icons.home_work_rounded,
+                profile.workoutLocation,
+              ),
               _buildMetaChip(
                 context,
                 Icons.timer_outlined,
@@ -776,10 +886,16 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              _exerciseIcon(exercise.movementPattern),
-              color: colorScheme.primary,
-            ),
+            clipBehavior: Clip.antiAlias,
+            child: exercise.animationFrames.isNotEmpty
+                ? _RoutineExerciseThumbnail(
+                    exercise: exercise,
+                    fallbackIcon: _exerciseIcon(exercise.movementPattern),
+                  )
+                : Icon(
+                    _exerciseIcon(exercise.movementPattern),
+                    color: colorScheme.primary,
+                  ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -816,14 +932,26 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    ...exercise.primaryMuscles.take(2).map(
+                    ...exercise.primaryMuscles
+                        .take(2)
+                        .map(
                           (muscle) => _miniChip(
                             context,
                             muscle,
                             AppTheme.secondaryContainer,
                           ),
                         ),
-                    _miniChip(context, exercise.equipment, AppTheme.primaryContainer),
+                    _miniChip(
+                      context,
+                      exercise.equipment,
+                      AppTheme.primaryContainer,
+                    ),
+                    if (exercise.targetDurationSeconds != null)
+                      _miniChip(
+                        context,
+                        '${exercise.targetDurationSeconds}s',
+                        AppTheme.tertiary,
+                      ),
                   ],
                 ),
               ],
@@ -874,7 +1002,9 @@ class _WorkoutContentState extends State<_WorkoutContent> {
       color: colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: colorScheme.outlineVariant.withValues(alpha: isDark ? 0.24 : 0.32),
+        color: colorScheme.outlineVariant.withValues(
+          alpha: isDark ? 0.24 : 0.32,
+        ),
       ),
       boxShadow: [
         BoxShadow(
@@ -883,6 +1013,126 @@ class _WorkoutContentState extends State<_WorkoutContent> {
           offset: const Offset(0, 8),
         ),
       ],
+    );
+  }
+}
+
+class _RoutineExerciseThumbnail extends StatefulWidget {
+  final WorkoutExercise exercise;
+  final IconData fallbackIcon;
+
+  const _RoutineExerciseThumbnail({
+    required this.exercise,
+    required this.fallbackIcon,
+  });
+
+  @override
+  State<_RoutineExerciseThumbnail> createState() =>
+      _RoutineExerciseThumbnailState();
+}
+
+class _RoutineExerciseThumbnailState extends State<_RoutineExerciseThumbnail> {
+  Timer? _previewTimer;
+  Timer? _settleTimer;
+  int _frameIndex = 0;
+  bool _isPreviewing = false;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RoutineExerciseThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.exercise.animationFrames != widget.exercise.animationFrames ||
+        oldWidget.exercise.frameDurationMillis !=
+            widget.exercise.frameDurationMillis) {
+      _stopPreview();
+    }
+  }
+
+  @override
+  void dispose() {
+    _previewTimer?.cancel();
+    _settleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPreview() {
+    if (widget.exercise.animationFrames.length < 2) {
+      return;
+    }
+
+    _previewTimer?.cancel();
+    _settleTimer?.cancel();
+    setState(() {
+      _isPreviewing = true;
+      _frameIndex = 0;
+    });
+
+    _previewTimer = Timer.periodic(
+      Duration(milliseconds: widget.exercise.frameDurationMillis),
+      (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _frameIndex =
+              (_frameIndex + 1) % widget.exercise.animationFrames.length;
+        });
+      },
+    );
+
+    _settleTimer = Timer(
+      Duration(milliseconds: widget.exercise.frameDurationMillis * 3),
+      _stopPreview,
+    );
+  }
+
+  void _stopPreview() {
+    _previewTimer?.cancel();
+    _settleTimer?.cancel();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isPreviewing = false;
+      _frameIndex = 0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final frame =
+        widget.exercise.animationFrames[_isPreviewing ? _frameIndex : 0];
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _startPreview,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          child: widget.exercise.animationFramesSource == 'file'
+              ? Image.file(
+                  File(frame),
+                  key: ValueKey<String>(frame),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) =>
+                      Icon(widget.fallbackIcon, color: colorScheme.primary),
+                )
+              : Image.asset(
+                  frame,
+                  key: ValueKey<String>(frame),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) =>
+                      Icon(widget.fallbackIcon, color: colorScheme.primary),
+                ),
+        ),
+      ),
     );
   }
 }
@@ -911,9 +1161,9 @@ class _MonthHeader extends StatelessWidget {
         ),
         Text(
           monthLabel,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         IconButton(
           onPressed: onNext,
@@ -995,7 +1245,9 @@ class _CalendarDay extends StatelessWidget {
             width: circleSize,
             height: circleSize,
             decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primaryContainer : Colors.transparent,
+              color: isSelected
+                  ? AppTheme.primaryContainer
+                  : Colors.transparent,
               shape: BoxShape.circle,
               boxShadow: isSelected
                   ? [
@@ -1034,6 +1286,231 @@ class _CalendarDay extends StatelessWidget {
   }
 }
 
+class _WorkoutDownloadPrompt extends StatelessWidget {
+  final bool syncingLibrary;
+  final double downloadProgress;
+  final String downloadPhase;
+  final String downloadPhaseMessage;
+  final String? errorMessage;
+  final bool shouldShowPrompt;
+  final Future<void> Function() onDownload;
+  final Future<void> Function() onSkip;
+
+  const _WorkoutDownloadPrompt({
+    required this.syncingLibrary,
+    required this.downloadProgress,
+    required this.downloadPhase,
+    required this.downloadPhaseMessage,
+    required this.errorMessage,
+    required this.shouldShowPrompt,
+    required this.onDownload,
+    required this.onSkip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final title = shouldShowPrompt
+        ? 'Download Your Exercise Library'
+        : 'Exercise Library Not Available';
+    final description = shouldShowPrompt
+        ? 'FitForge will download the full exercise dataset locally so your workouts can be personalized and run smoothly without shipping thousands of files.'
+        : 'The full exercise dataset is not configured for download yet. Please check your network or ask your app administrator to enable the exercise library source.';
+
+    return Scaffold(
+      appBar: const TopAppBar(title: 'Exercise Library'),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              description,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 15,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (errorMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.error.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Text(
+                  errorMessage!,
+                  style: TextStyle(
+                    color: colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+            ],
+            if (syncingLibrary) ...[
+              _DownloadProgressPanel(
+                progress: downloadProgress,
+                phase: downloadPhase,
+                message: downloadPhaseMessage,
+              ),
+            ] else if (shouldShowPrompt) ...[
+              ElevatedButton(
+                onPressed: onDownload,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Download Now'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: onSkip,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Maybe Later'),
+              ),
+            ] else ...[
+              ElevatedButton(
+                onPressed: null,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Exercise library unavailable'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadProgressPanel extends StatelessWidget {
+  final double progress;
+  final String phase;
+  final String message;
+  final bool compact;
+
+  const _DownloadProgressPanel({
+    required this.progress,
+    required this.phase,
+    required this.message,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final phaseTitle = _phaseTitle(phase);
+    final percent = (progress.clamp(0.0, 1.0) * 100).round();
+    final icon = _phaseIcon(phase);
+
+    return Container(
+      padding: EdgeInsets.all(compact ? 16 : 18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(compact ? 18 : 22),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.32),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: compact ? 40 : 48,
+                height: compact ? 40 : 48,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      phaseTitle,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$percent% complete',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: compact ? 8 : 10,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: TextStyle(
+              color: colorScheme.onSurfaceVariant,
+              fontSize: compact ? 13 : 14,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _phaseTitle(String phase) {
+    return switch (phase) {
+      'dataset' => 'Downloading exercise data',
+      'images' => 'Downloading exercise images',
+      'extracting' => 'Extracting and organizing files',
+      'setup' => 'Setting up your workout library',
+      'complete' => 'Exercise library ready',
+      'failed' => 'Download interrupted',
+      _ => 'Preparing your exercise library',
+    };
+  }
+
+  static IconData _phaseIcon(String phase) {
+    return switch (phase) {
+      'dataset' => Icons.download_rounded,
+      'images' => Icons.photo_library_outlined,
+      'extracting' => Icons.unarchive_outlined,
+      'setup' => Icons.folder_copy_outlined,
+      'complete' => Icons.check_circle_outline_rounded,
+      'failed' => Icons.error_outline_rounded,
+      _ => Icons.sync_rounded,
+    };
+  }
+}
+
 class _WorkoutLoadingState extends StatelessWidget {
   const _WorkoutLoadingState();
 
@@ -1041,9 +1518,7 @@ class _WorkoutLoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const TopAppBar(title: 'Good Morning'),
-      body: const Center(
-        child: CircularProgressIndicator(),
-      ),
+      body: const Center(child: CircularProgressIndicator()),
     );
   }
 }

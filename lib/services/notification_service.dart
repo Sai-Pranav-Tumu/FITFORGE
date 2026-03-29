@@ -10,6 +10,13 @@ class NotificationService {
   static const int hydrationReminderId = 2001;
   static const int hydrationReminderFollowUpId = 2002;
   static const int hydrationReminderLateId = 2003;
+  static const AndroidNotificationChannel _hydrationChannel =
+      AndroidNotificationChannel(
+        'hydration_reminders',
+        'Hydration Reminders',
+        description: 'Reminders to drink water regularly',
+        importance: Importance.high,
+      );
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -24,14 +31,26 @@ class NotificationService {
     const initSettings = InitializationSettings(android: android);
 
     await _plugin.initialize(initSettings);
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await androidPlugin?.createNotificationChannel(_hydrationChannel);
     _initialized = true;
   }
 
-  Future<void> requestPermissionIfNeeded() async {
-    final android =
-        _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-    await android?.requestNotificationsPermission();
+  Future<bool> requestPermissionIfNeeded() async {
+    await initialize();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    final notificationsEnabled = await android?.areNotificationsEnabled();
+    if (notificationsEnabled != true) {
+      await android?.requestNotificationsPermission();
+    }
+    await android?.requestExactAlarmsPermission();
+    return await android?.areNotificationsEnabled() ?? true;
   }
 
   Future<void> scheduleHydrationReminder({
@@ -57,7 +76,7 @@ class NotificationService {
           priority: Priority.high,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
   }
 

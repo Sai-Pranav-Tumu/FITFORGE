@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/nutrition_models.dart';
@@ -104,6 +105,15 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                   ),
                   const SizedBox(height: 24),
                   _buildMainCard(context, summary, colorScheme),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push('/diet-plan'),
+                      icon: const Icon(Icons.restaurant_menu_rounded),
+                      label: const Text('Open Diet Plan'),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   _buildSuggestedFoodsCard(context, summary, colorScheme),
                   const SizedBox(height: 24),
@@ -636,7 +646,10 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
             const SizedBox(height: 8),
             Text(
               'Last drink: ${_timeLabel(waterProvider.lastIntakeAt!)}',
-              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
           const SizedBox(height: 6),
@@ -768,7 +781,10 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
-                    _targetChip('Calories', '${calories.toStringAsFixed(0)} kcal'),
+                    _targetChip(
+                      'Calories',
+                      '${calories.toStringAsFixed(0)} kcal',
+                    ),
                     _targetChip(
                       'Protein',
                       '${(summary.totals['protein'] ?? 0).toStringAsFixed(0)} / ${protein.toStringAsFixed(0)}g',
@@ -977,12 +993,63 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
     });
   }
 
+  Color _accentColor() {
+    return switch (widget.mealType) {
+      MealType.breakfast => AppTheme.primaryContainer,
+      MealType.lunch => AppTheme.secondaryContainer,
+      MealType.dinner => AppTheme.tertiary,
+    };
+  }
+
+  IconData _accentIcon() {
+    return switch (widget.mealType) {
+      MealType.breakfast => Icons.wb_twilight_rounded,
+      MealType.lunch => Icons.sunny,
+      MealType.dinner => Icons.dark_mode_rounded,
+    };
+  }
+
+  String _headerSubtitle() {
+    return switch (widget.mealType) {
+      MealType.breakfast =>
+        'Pick a clean morning meal and set the serving size clearly.',
+      MealType.lunch => 'Search your foods and add an accurate midday portion.',
+      MealType.dinner =>
+        'Log your evening meal with the right quantity and macros.',
+    };
+  }
+
+  Widget _fieldLabel(BuildContext context, String label) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.3,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  Widget _inputShell(BuildContext context, {required Widget child}) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.22)),
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final viewInsets = media.viewInsets.bottom;
     final maxHeight = media.size.height - viewInsets - 10;
     final cs = Theme.of(context).colorScheme;
+    final accent = _accentColor();
 
     return SafeArea(
       child: AnimatedPadding(
@@ -993,72 +1060,144 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
           constraints: BoxConstraints(maxHeight: maxHeight),
           decoration: BoxDecoration(
             color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             children: [
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Container(
-                width: 42,
-                height: 4,
+                width: 48,
+                height: 5,
                 decoration: BoxDecoration(
-                  color: cs.outlineVariant,
+                  color: cs.outlineVariant.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Add ${widget.mealType.label} Food',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(height: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: accent.withValues(alpha: 0.16)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(_accentIcon(), color: accent),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Add ${widget.mealType.label} Food',
+                              style: const TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _headerSubtitle(),
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 12.5,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 18),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: TextField(
-                  controller: _queryController,
-                  onChanged: (value) {
-                    _onQueryChanged(value);
-                    setState(() {});
-                  },
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'Search food (dosa, idli, paneer...)',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _queryController.text.trim().isEmpty
-                        ? null
-                        : IconButton(
-                            onPressed: () {
-                              _queryController.clear();
-                              _onQueryChanged('');
-                              setState(() {});
-                            },
-                            icon: const Icon(Icons.close),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _fieldLabel(context, 'Food Search'),
+                    const SizedBox(height: 8),
+                    _inputShell(
+                      context,
+                      child: TextField(
+                        controller: _queryController,
+                        onChanged: (value) {
+                          _onQueryChanged(value);
+                          setState(() {});
+                        },
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'Search food (dosa, idli, paneer...)',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _queryController.text.trim().isEmpty
+                              ? null
+                              : IconButton(
+                                  onPressed: () {
+                                    _queryController.clear();
+                                    _onQueryChanged('');
+                                    setState(() {});
+                                  },
+                                  icon: const Icon(Icons.close),
+                                ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 18,
                           ),
-                  ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _fieldLabel(context, 'Quantity (grams)'),
+                    const SizedBox(height: 8),
+                    _inputShell(
+                      context,
+                      child: TextField(
+                        controller: _gramsController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          hintText: '100',
+                          prefixIcon: Icon(Icons.scale_outlined),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: TextField(
-                  controller: _gramsController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Quantity (grams)',
-                    prefixIcon: Icon(Icons.scale_outlined),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 child: _loading
                     ? Padding(
                         key: const ValueKey('loading'),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: LinearProgressIndicator(
                           minHeight: 3,
                           borderRadius: BorderRadius.circular(4),
@@ -1067,30 +1206,71 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                     : const SizedBox(key: ValueKey('idle'), height: 3),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _results.isEmpty
-                        ? 'No matches yet'
-                        : '${_results.length} foods found',
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
-                  ),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        _results.isEmpty
+                            ? 'No matches yet'
+                            : '${_results.length} foods found',
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 10),
               Expanded(
                 child: _results.isEmpty
                     ? Center(
-                        child: Text(
-                          _queryController.text.trim().isEmpty
-                              ? 'Start typing to search foods'
-                              : 'No items found for "${_queryController.text.trim()}"',
-                          style: TextStyle(color: cs.onSurfaceVariant),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 28),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  color: accent.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.restaurant_menu_rounded,
+                                  color: accent,
+                                  size: 30,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _queryController.text.trim().isEmpty
+                                    ? 'Start typing to search foods'
+                                    : 'No items found for "${_queryController.text.trim()}"',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       )
                     : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                         itemCount: _results.length,
                         separatorBuilder: (context, index) =>
                             const SizedBox(height: 8),
@@ -1099,26 +1279,24 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                           final selected = _selected?.id == food.id;
                           return Material(
                             color: selected
-                                ? AppTheme.primaryContainer.withValues(
-                                    alpha: 0.14,
-                                  )
+                                ? accent.withValues(alpha: 0.14)
                                 : cs.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(14),
+                            borderRadius: BorderRadius.circular(16),
                             child: InkWell(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(16),
                               onTap: () => setState(() => _selected = food),
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: Row(
                                   children: [
                                     Container(
-                                      width: 34,
-                                      height: 34,
+                                      width: 38,
+                                      height: 38,
                                       decoration: BoxDecoration(
                                         color: selected
-                                            ? AppTheme.primaryContainer
+                                            ? accent
                                             : cs.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Icon(
                                         Icons.restaurant_menu,
@@ -1128,7 +1306,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                                             : cs.onSurfaceVariant,
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -1142,7 +1320,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                                               fontWeight: FontWeight.w700,
                                             ),
                                           ),
-                                          const SizedBox(height: 3),
+                                          const SizedBox(height: 4),
                                           Text(
                                             '${food.calories.toStringAsFixed(0)} kcal | P ${food.protein.toStringAsFixed(1)} | C ${food.carbs.toStringAsFixed(1)} | F ${food.fat.toStringAsFixed(1)} (100g)',
                                             maxLines: 1,
@@ -1155,7 +1333,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 10),
                                     AnimatedScale(
                                       duration: const Duration(
                                         milliseconds: 180,
@@ -1165,9 +1343,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                                         selected
                                             ? Icons.check_circle
                                             : Icons.radio_button_unchecked,
-                                        color: selected
-                                            ? AppTheme.primaryContainer
-                                            : cs.outline,
+                                        color: selected ? accent : cs.outline,
                                       ),
                                     ),
                                   ],
@@ -1178,33 +1354,48 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                         },
                       ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh.withValues(alpha: 0.55),
+                  border: Border(
+                    top: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.18),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _selected == null
-                          ? null
-                          : () {
-                              final grams =
-                                  double.tryParse(
-                                    _gramsController.text.trim(),
-                                  ) ??
-                                  100;
-                              Navigator.of(context).pop(
-                                _FoodSelection(
-                                  food: _selected!,
-                                  quantityGrams: grams <= 0 ? 100 : grams,
-                                ),
-                              );
-                            },
-                      child: const Text('Add'),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _selected == null
+                            ? null
+                            : () {
+                                final grams =
+                                    double.tryParse(
+                                      _gramsController.text.trim(),
+                                    ) ??
+                                    100;
+                                Navigator.of(context).pop(
+                                  _FoodSelection(
+                                    food: _selected!,
+                                    quantityGrams: grams <= 0 ? 100 : grams,
+                                  ),
+                                );
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Add Food'),
+                      ),
                     ),
                   ],
                 ),

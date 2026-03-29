@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/auth_error_card.dart';
 import '../../widgets/dark_mode_toggle.dart';
 import '../../widgets/google_sign_in_button.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/user_provider.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,30 +16,28 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
-  final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
 
   Future<void> _submitRegister() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
-      final creds = await context
-          .read<AuthProvider>()
-          .signUp(_emailCtrl.text.trim(), _passwordCtrl.text);
+      final creds = await context.read<AuthProvider>().signUp(
+        _emailCtrl.text.trim(),
+        _passwordCtrl.text,
+      );
       if (creds?.user != null) {
-        await context
-            .read<UserProvider>()
-            .createProfile(creds!.user!, _nameCtrl.text.trim());
         // New email user → onboarding
         if (mounted) context.go('/onboarding');
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString());
+      if (mounted) setState(() => _errorMessage = formatAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -47,7 +45,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
@@ -109,9 +106,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         children: [
                           Text(
                             'Join\nFitForge',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
+                            style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 32,
@@ -143,8 +138,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerLow,
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(32)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(32),
+                    ),
                   ),
                   child: Column(
                     children: [
@@ -153,15 +149,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         width: 48,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: colorScheme.outlineVariant
-                              .withValues(alpha: 0.3),
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.3,
+                          ),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                       Expanded(
                         child: ListView(
                           padding: const EdgeInsets.only(
-                              left: 40, right: 40, top: 40, bottom: 20),
+                            left: 40,
+                            right: 40,
+                            top: 40,
+                            bottom: 20,
+                          ),
                           children: [
                             // ── Google Button (wired up) ──────────────────
                             const GoogleSignInButton(),
@@ -173,12 +174,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               children: [
                                 Expanded(
                                   child: Divider(
-                                      color: colorScheme.outlineVariant
-                                          .withValues(alpha: 0.3)),
+                                    color: colorScheme.outlineVariant
+                                        .withValues(alpha: 0.3),
+                                  ),
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
+                                    horizontal: 16,
+                                  ),
                                   child: Text(
                                     'OR',
                                     style: TextStyle(
@@ -190,37 +193,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 Expanded(
                                   child: Divider(
-                                      color: colorScheme.outlineVariant
-                                          .withValues(alpha: 0.3)),
+                                    color: colorScheme.outlineVariant
+                                        .withValues(alpha: 0.3),
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 24),
 
                             // ── Error Message ─────────────────────────────
-                            if (_errorMessage != null) ...[
-                              Text(_errorMessage!,
-                                  style: const TextStyle(
-                                      color: Colors.red, fontSize: 13)),
-                              const SizedBox(height: 16),
-                            ],
-
-                            // ── Full Name ─────────────────────────────────
-                            Text(
-                              'FULL NAME',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.outline,
-                                letterSpacing: 1.5,
-                              ),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) {
+                                final offset =
+                                    Tween<Offset>(
+                                      begin: const Offset(0, -0.06),
+                                      end: Offset.zero,
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutCubic,
+                                      ),
+                                    );
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: offset,
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: _errorMessage == null
+                                  ? const SizedBox.shrink(
+                                      key: ValueKey('register-no-error'),
+                                    )
+                                  : Padding(
+                                      key: ValueKey(_errorMessage),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 16,
+                                      ),
+                                      child: AuthErrorCard(
+                                        title: 'Couldn\'t create your account',
+                                        message: _errorMessage!,
+                                      ),
+                                    ),
                             ),
-                            const SizedBox(height: 8),
-                            _buildInputBox(context,
-                                controller: _nameCtrl,
-                                hintText: 'John Doe',
-                                obscureText: false),
-                            const SizedBox(height: 24),
 
                             // ── Email ─────────────────────────────────────
                             Text(
@@ -233,10 +252,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            _buildInputBox(context,
-                                controller: _emailCtrl,
-                                hintText: 'name@example.com',
-                                obscureText: false),
+                            _buildInputBox(
+                              context,
+                              controller: _emailCtrl,
+                              hintText: 'name@example.com',
+                              obscureText: false,
+                            ),
                             const SizedBox(height: 24),
 
                             // ── Password ──────────────────────────────────
@@ -264,7 +285,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   size: 20,
                                 ),
                                 onPressed: () => setState(
-                                    () => _obscurePassword = !_obscurePassword),
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 40),
@@ -293,8 +315,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           height: 24,
                                           width: 24,
                                           child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2),
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
                                         )
                                       : const Text(
                                           'Create Account',
@@ -370,20 +393,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
         style: TextStyle(color: colorScheme.onSurface),
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle:
-              TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.4)),
+          hintStyle: TextStyle(
+            color: colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
           filled: true,
           fillColor: Colors.transparent,
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           suffixIcon: suffixIcon,
           border: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.transparent, width: 2)),
+            borderSide: BorderSide(color: Colors.transparent, width: 2),
+          ),
           enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.transparent, width: 2)),
+            borderSide: BorderSide(color: Colors.transparent, width: 2),
+          ),
           focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: colorScheme.primary, width: 2)),
+            borderSide: BorderSide(color: colorScheme.primary, width: 2),
+          ),
         ),
       ),
     );

@@ -53,6 +53,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _nextPage() {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_currentIndex < _totalQuestions - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
@@ -95,23 +96,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     try {
       await context.read<UserProvider>().saveOnboardingAnswers(
-            user: authUser,
-            name: _nameController.text.trim(),
-            gender: _gender!,
-            age: _age,
-            weight: _weight,
-            occupation: _occupation!,
-            sittingHours: _sittingHours!,
-            fitnessGoal: _fitnessGoal!,
-            workoutDays: _workoutDays!,
-            height: _height,
-            trainingLevel: _trainingLevel ?? 'Beginner',
-            workoutLocation: _workoutLocation ?? 'Home',
-            availableEquipment: _availableEquipment ?? 'Bodyweight',
-            sessionDurationMinutes: _sessionDurationMinutes ?? 30,
-            targetMuscleFocus: _targetMuscleFocus ?? 'Full Body',
-            jointSensitivity: _jointSensitivity ?? 'None',
-          );
+        user: authUser,
+        name: _nameController.text.trim(),
+        gender: _gender!,
+        age: _age,
+        weight: _weight,
+        occupation: _occupation!,
+        sittingHours: _sittingHours!,
+        fitnessGoal: _fitnessGoal!,
+        workoutDays: _workoutDays!,
+        height: _height,
+        trainingLevel: _trainingLevel ?? 'Beginner',
+        workoutLocation: _workoutLocation ?? 'Home',
+        availableEquipment: _availableEquipment ?? 'Bodyweight',
+        sessionDurationMinutes: _sessionDurationMinutes ?? 30,
+        targetMuscleFocus: _targetMuscleFocus ?? 'Full Body',
+        jointSensitivity: _jointSensitivity ?? 'None',
+      );
 
       if (!mounted) return;
       context.go('/generating');
@@ -230,7 +231,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       min: 120,
                       max: 230,
                       controller: _heightController,
-                      onChanged: (value) => setState(() => _height = value.toDouble()),
+                      onChanged: (value) =>
+                          setState(() => _height = value.toDouble()),
                     ),
                     _buildMetricWheelQuestion(
                       context,
@@ -242,7 +244,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       min: 30,
                       max: 200,
                       controller: _weightController,
-                      onChanged: (value) => setState(() => _weight = value.toDouble()),
+                      onChanged: (value) =>
+                          setState(() => _weight = value.toDouble()),
                     ),
                     _buildChoiceQuestion(
                       context,
@@ -272,7 +275,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           subtitle: 'Variable activity through the week',
                         ),
                       ],
-                      onSelected: (value) => setState(() => _occupation = value),
+                      onSelected: (value) =>
+                          setState(() => _occupation = value),
                     ),
                     _buildChoiceQuestion(
                       context,
@@ -286,7 +290,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption('6-8 Hours', '🪑'),
                         _ChoiceOption('8+ Hours', '🪑'),
                       ],
-                      onSelected: (value) => setState(() => _sittingHours = value),
+                      onSelected: (value) =>
+                          setState(() => _sittingHours = value),
                     ),
                     _buildChoiceQuestion(
                       context,
@@ -300,7 +305,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption('Improve Stamina', '🏃'),
                         _ChoiceOption('Stay Active', '🧘'),
                       ],
-                      onSelected: (value) => setState(() => _fitnessGoal = value),
+                      onSelected: (value) =>
+                          setState(() => _fitnessGoal = value),
                     ),
                     _buildChoiceQuestion(
                       context,
@@ -312,20 +318,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption(
                           'Beginner',
                           '🌱',
-                          subtitle: 'New to structured workouts or returning after a break',
+                          subtitle:
+                              'New to structured workouts or returning after a break',
                         ),
                         _ChoiceOption(
                           'Intermediate',
                           '⚡',
-                          subtitle: 'Comfortable with regular workouts and basic form',
+                          subtitle:
+                              'Comfortable with regular workouts and basic form',
                         ),
                         _ChoiceOption(
                           'Advanced',
                           '🔥',
-                          subtitle: 'Experienced with higher volume and harder variations',
+                          subtitle:
+                              'Experienced with higher volume and harder variations',
                         ),
                       ],
-                      onSelected: (value) => setState(() => _trainingLevel = value),
+                      onSelected: (value) =>
+                          setState(() => _trainingLevel = value),
                     ),
                     _buildChoiceQuestion(
                       context,
@@ -338,7 +348,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption('Gym', '🏋'),
                         _ChoiceOption('Hybrid', '🔁'),
                       ],
-                      onSelected: (value) => setState(() => _workoutLocation = value),
+                      onSelected: (value) =>
+                          setState(() => _workoutLocation = value),
                     ),
                     _buildChoiceQuestion(
                       context,
@@ -355,7 +366,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption(
                           'Bands & Dumbbells',
                           '🟦',
-                          subtitle: 'Resistance bands or a light dumbbell setup',
+                          subtitle:
+                              'Resistance bands or a light dumbbell setup',
                         ),
                         _ChoiceOption(
                           'Full Gym',
@@ -403,7 +415,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     _buildChoiceQuestion(
                       context,
-                      title: 'Any joints or areas we should be extra careful with?',
+                      title:
+                          'Any joints or areas we should be extra careful with?',
                       subtitle:
                           'We use this to reduce risky movements and add more friendly alternatives.',
                       selectedValue: _jointSensitivity,
@@ -458,17 +471,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         const SizedBox(height: 24),
         Text(
           title,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: colorScheme.onSurface,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineMedium?.copyWith(color: colorScheme.onSurface),
         ),
         const SizedBox(height: 8),
         Text(
           subtitle,
-          style: TextStyle(
-            fontSize: 14,
-            color: colorScheme.onSurfaceVariant,
-          ),
+          style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 32),
         Expanded(child: body),
@@ -523,13 +533,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: TextField(
               controller: _nameController,
               textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.done,
               onChanged: (_) => setState(() {}),
+              onSubmitted: (_) {
+                if (_nameController.text.trim().isNotEmpty) {
+                  _nextPage();
+                }
+              },
               decoration: const InputDecoration(
                 hintText: 'Enter your name',
                 prefixIcon: Icon(Icons.person_outline),
                 border: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 18,
+                ),
               ),
             ),
           ),
@@ -594,8 +612,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         '$age',
                         style: TextStyle(
                           fontSize: isSelected ? 36 : 28,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                           color: isSelected
                               ? colorScheme.onSurface
                               : colorScheme.onSurfaceVariant.withOpacity(0.5),
@@ -673,7 +692,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     : FontWeight.w500,
                                 color: isSelected
                                     ? colorScheme.onSurface
-                                    : colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                    : colorScheme.onSurfaceVariant.withOpacity(
+                                        0.5,
+                                      ),
                               ),
                             ),
                             TextSpan(
@@ -683,7 +704,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 fontWeight: FontWeight.w700,
                                 color: isSelected
                                     ? AppTheme.primaryContainer
-                                    : colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                    : colorScheme.onSurfaceVariant.withOpacity(
+                                        0.5,
+                                      ),
                               ),
                             ),
                           ],
@@ -706,8 +729,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return _buildQuestionScaffold(
       context: context,
       title: 'How many days per week can you work out?',
-      subtitle:
-          'We use this to choose a split you can actually stick with.',
+      subtitle: 'We use this to choose a split you can actually stick with.',
       canContinue: _workoutDays != null,
       buttonLabel: 'Build My Plan',
       body: Wrap(
@@ -788,8 +810,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border(
                   left: BorderSide(
-                    color:
-                        isSelected ? AppTheme.primaryContainer : Colors.transparent,
+                    color: isSelected
+                        ? AppTheme.primaryContainer
+                        : Colors.transparent,
                     width: 4,
                   ),
                 ),

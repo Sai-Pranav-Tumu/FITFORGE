@@ -6,9 +6,11 @@ import 'app.dart';
 import 'providers/theme_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_provider.dart';
+import 'providers/workout_provider.dart';
 import 'providers/nutrition_provider.dart';
 import 'providers/water_provider.dart';
 import 'providers/diet_plan_provider.dart';
+import 'services/exercise_library_service.dart';
 import 'services/nutrition_service.dart';
 import 'services/notification_service.dart';
 
@@ -59,6 +61,14 @@ void main() async {
             return provider;
           },
         ),
+        ChangeNotifierProxyProvider<UserProvider, WorkoutProvider>(
+          create: (_) => WorkoutProvider(),
+          update: (_, userProvider, workoutProvider) {
+            final provider = workoutProvider ?? WorkoutProvider();
+            provider.sync(userProvider.userProfile);
+            return provider;
+          },
+        ),
       ],
       child: const FitForgeApp(),
     ),
@@ -71,5 +81,9 @@ void main() async {
 
   NotificationService.instance.initialize().catchError((error, stack) {
     debugPrint('Notification init failed: $error');
+  });
+
+  ExerciseLibraryService.instance.initialize().catchError((error, stack) {
+    debugPrint('Exercise library init failed: $error');
   });
 }

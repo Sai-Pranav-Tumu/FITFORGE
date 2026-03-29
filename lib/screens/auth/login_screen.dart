@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/auth_error_card.dart';
 import '../../widgets/dark_mode_toggle.dart';
 import '../../widgets/google_sign_in_button.dart';
 import 'package:provider/provider.dart';
@@ -21,17 +22,19 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
 
   Future<void> _submitLogin() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
-      await context
-          .read<AuthProvider>()
-          .signIn(_emailCtrl.text.trim(), _passwordCtrl.text);
+      await context.read<AuthProvider>().signIn(
+        _emailCtrl.text.trim(),
+        _passwordCtrl.text,
+      );
       // go_router redirect handles navigation
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString());
+      if (mounted) setState(() => _errorMessage = formatAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -100,9 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           Text(
                             'Welcome\nBack',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
+                            style: Theme.of(context).textTheme.headlineMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 32,
@@ -134,8 +135,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     color: colorScheme.surfaceContainerLow,
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(32)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(32),
+                    ),
                   ),
                   child: Column(
                     children: [
@@ -144,15 +146,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: 48,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: colorScheme.outlineVariant
-                              .withValues(alpha: 0.3),
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.3,
+                          ),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                       Expanded(
                         child: ListView(
                           padding: const EdgeInsets.only(
-                              left: 40, right: 40, top: 40, bottom: 20),
+                            left: 40,
+                            right: 40,
+                            top: 40,
+                            bottom: 20,
+                          ),
                           children: [
                             // ── Google Button (now wired up) ─────────────
                             const GoogleSignInButton(),
@@ -164,12 +171,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               children: [
                                 Expanded(
                                   child: Divider(
-                                      color: colorScheme.outlineVariant
-                                          .withValues(alpha: 0.3)),
+                                    color: colorScheme.outlineVariant
+                                        .withValues(alpha: 0.3),
+                                  ),
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
+                                    horizontal: 16,
+                                  ),
                                   child: Text(
                                     'OR',
                                     style: TextStyle(
@@ -181,20 +190,53 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 Expanded(
                                   child: Divider(
-                                      color: colorScheme.outlineVariant
-                                          .withValues(alpha: 0.3)),
+                                    color: colorScheme.outlineVariant
+                                        .withValues(alpha: 0.3),
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 24),
 
                             // ── Error Message ─────────────────────────────
-                            if (_errorMessage != null) ...[
-                              Text(_errorMessage!,
-                                  style: const TextStyle(
-                                      color: Colors.red, fontSize: 13)),
-                              const SizedBox(height: 16),
-                            ],
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 260),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) {
+                                final offset =
+                                    Tween<Offset>(
+                                      begin: const Offset(0, -0.06),
+                                      end: Offset.zero,
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutCubic,
+                                      ),
+                                    );
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: offset,
+                                    child: child,
+                                  ),
+                                );
+                              },
+                              child: _errorMessage == null
+                                  ? const SizedBox.shrink(
+                                      key: ValueKey('login-no-error'),
+                                    )
+                                  : Padding(
+                                      key: ValueKey(_errorMessage),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 16,
+                                      ),
+                                      child: AuthErrorCard(
+                                        title: 'Couldn\'t sign you in',
+                                        message: _errorMessage!,
+                                      ),
+                                    ),
+                            ),
 
                             // ── Email ─────────────────────────────────────
                             Text(
@@ -240,7 +282,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   size: 20,
                                 ),
                                 onPressed: () => setState(
-                                    () => _obscurePassword = !_obscurePassword),
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 40),
@@ -269,8 +312,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                           height: 24,
                                           width: 24,
                                           child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2),
+                                            color: Colors.white,
+                                            strokeWidth: 2,
+                                          ),
                                         )
                                       : const Text(
                                           'Log In',
@@ -346,20 +390,26 @@ class _LoginScreenState extends State<LoginScreen> {
         style: TextStyle(color: colorScheme.onSurface),
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle:
-              TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.4)),
+          hintStyle: TextStyle(
+            color: colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
           filled: true,
           fillColor: Colors.transparent,
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           suffixIcon: suffixIcon,
           border: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.transparent, width: 2)),
+            borderSide: BorderSide(color: Colors.transparent, width: 2),
+          ),
           enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.transparent, width: 2)),
+            borderSide: BorderSide(color: Colors.transparent, width: 2),
+          ),
           focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: colorScheme.primary, width: 2)),
+            borderSide: BorderSide(color: colorScheme.primary, width: 2),
+          ),
         ),
       ),
     );

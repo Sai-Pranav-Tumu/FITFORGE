@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/nutrition_provider.dart';
 import '../../providers/user_provider.dart';
@@ -208,8 +209,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _dietaryPreferenceLabel(user?.dietaryPreference ?? 'any'),
-                            style: TextStyle(color: colorScheme.onSurfaceVariant),
+                            _dietaryPreferenceLabel(
+                              user?.dietaryPreference ?? 'any',
+                            ),
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ),
@@ -260,7 +265,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         TextButton(
-                          onPressed: () => _showWorkoutPreferencesSheet(context),
+                          onPressed: () =>
+                              _showWorkoutPreferencesSheet(context),
                           child: const Text('Change'),
                         ),
                       ],
@@ -665,11 +671,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String userUnitsLabel(BuildContext context) {
-    final units = context.watch<UserProvider>().userProfile?.preferredUnits ?? 'metric';
+    final units =
+        context.watch<UserProvider>().userProfile?.preferredUnits ?? 'metric';
     return units == 'imperial' ? 'LB/FT' : 'KG/CM';
   }
 
-  String _displayWeight(user) {
+  String _displayWeight(UserModel? user) {
     final weight = user?.weight ?? 0.0;
     final units = user?.preferredUnits ?? 'metric';
     if (units == 'imperial') {
@@ -678,7 +685,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${weight.toStringAsFixed(1)} kg';
   }
 
-  String _displayHeight(user) {
+  String _displayHeight(UserModel? user) {
     final height = user?.height ?? 170.0;
     final units = user?.preferredUnits ?? 'metric';
     if (units == 'imperial') {
@@ -741,7 +748,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ListTile(
                   title: const Text('Metric (kg/cm)'),
                   trailing: user.preferredUnits == 'metric'
-                      ? const Icon(Icons.check, color: AppTheme.primaryContainer)
+                      ? const Icon(
+                          Icons.check,
+                          color: AppTheme.primaryContainer,
+                        )
                       : null,
                   onTap: () async {
                     await context.read<UserProvider>().updateProfile(
@@ -753,7 +763,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ListTile(
                   title: const Text('Imperial (lb/ft)'),
                   trailing: user.preferredUnits == 'imperial'
-                      ? const Icon(Icons.check, color: AppTheme.primaryContainer)
+                      ? const Icon(
+                          Icons.check,
+                          color: AppTheme.primaryContainer,
+                        )
                       : null,
                   onTap: () async {
                     await context.read<UserProvider>().updateProfile(
@@ -797,7 +810,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   return ListTile(
                     title: Text(option.$2),
                     trailing: selected
-                        ? const Icon(Icons.check, color: AppTheme.primaryContainer)
+                        ? const Icon(
+                            Icons.check,
+                            color: AppTheme.primaryContainer,
+                          )
                         : null,
                     onTap: () async {
                       await context.read<UserProvider>().updateProfile(
@@ -889,132 +905,298 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final cs = Theme.of(context).colorScheme;
+
             Widget choiceGroup(
               String title,
+              String subtitle,
+              IconData icon,
+              Color accent,
               List<String> options,
               String selected,
               ValueChanged<String> onSelected,
             ) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(icon, color: accent, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: options.map((option) {
-                      final isSelected = option == selected;
-                      return ChoiceChip(
-                        label: Text(option),
-                        selected: isSelected,
-                        onSelected: (_) => onSelected(option),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: options.map((option) {
+                        final isSelected = option == selected;
+                        return ChoiceChip(
+                          label: Text(option),
+                          selected: isSelected,
+                          showCheckmark: false,
+                          avatar: isSelected
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: accent,
+                                )
+                              : null,
+                          labelStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? cs.onSurface
+                                : cs.onSurfaceVariant,
+                          ),
+                          side: BorderSide(
+                            color: isSelected
+                                ? accent.withValues(alpha: 0.24)
+                                : cs.outlineVariant.withValues(alpha: 0.2),
+                          ),
+                          backgroundColor: cs.surfaceContainerHighest,
+                          selectedColor: accent.withValues(alpha: 0.12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 10,
+                          ),
+                          onSelected: (_) => onSelected(option),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               );
             }
 
             return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  20,
-                  20,
-                  20 + MediaQuery.of(sheetContext).viewInsets.bottom,
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
                 ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Workout Preferences',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 18),
-                      choiceGroup(
-                        'Training Level',
-                        const ['Beginner', 'Intermediate', 'Advanced'],
-                        trainingLevel,
-                        (value) => setModalState(() => trainingLevel = value),
-                      ),
-                      const SizedBox(height: 16),
-                      choiceGroup(
-                        'Workout Location',
-                        const ['Home', 'Gym', 'Hybrid'],
-                        workoutLocation,
-                        (value) => setModalState(() => workoutLocation = value),
-                      ),
-                      const SizedBox(height: 16),
-                      choiceGroup(
-                        'Equipment',
-                        const ['Bodyweight', 'Bands & Dumbbells', 'Full Gym'],
-                        availableEquipment,
-                        (value) => setModalState(() => availableEquipment = value),
-                      ),
-                      const SizedBox(height: 16),
-                      choiceGroup(
-                        'Session Length',
-                        const ['20', '30', '45', '60'],
-                        '$sessionDurationMinutes',
-                        (value) => setModalState(
-                          () => sessionDurationMinutes = int.parse(value),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: cs.outlineVariant.withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      choiceGroup(
-                        'Focus Area',
-                        const [
-                          'Full Body',
-                          'Upper Body',
-                          'Lower Body',
-                          'Core',
-                          'Back & Posture',
-                        ],
-                        targetMuscleFocus,
-                        (value) => setModalState(() => targetMuscleFocus = value),
-                      ),
-                      const SizedBox(height: 16),
-                      choiceGroup(
-                        'Joint Care',
-                        const ['None', 'Knees', 'Lower Back', 'Shoulders'],
-                        jointSensitivity,
-                        (value) => setModalState(() => jointSensitivity = value),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () async {
-                            await context.read<UserProvider>().updateProfile(
-                                  user.copyWith(
-                                    trainingLevel: trainingLevel,
-                                    workoutLocation: workoutLocation,
-                                    availableEquipment: availableEquipment,
-                                    sessionDurationMinutes: sessionDurationMinutes,
-                                    targetMuscleFocus: targetMuscleFocus,
-                                    jointSensitivity: jointSensitivity,
+                        const SizedBox(height: 18),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: AppTheme.secondaryContainer.withValues(
+                                alpha: 0.16,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.secondaryContainer.withValues(
+                                    alpha: 0.16,
                                   ),
-                                );
-                            if (sheetContext.mounted) {
-                              Navigator.of(sheetContext).pop();
-                            }
-                          },
-                          child: const Text('Save Workout Preferences'),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.tune_rounded,
+                                  color: AppTheme.secondaryContainer,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Workout Preferences',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Shape your plan so it feels realistic, balanced, and sustainable.',
+                                      style: TextStyle(
+                                        color: cs.onSurfaceVariant,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        choiceGroup(
+                          'Training Level',
+                          'We tune volume and intensity around this.',
+                          Icons.leaderboard_rounded,
+                          AppTheme.primaryContainer,
+                          const ['Beginner', 'Intermediate', 'Advanced'],
+                          trainingLevel,
+                          (value) => setModalState(() => trainingLevel = value),
+                        ),
+                        const SizedBox(height: 14),
+                        choiceGroup(
+                          'Workout Location',
+                          'Keeps the routine realistic for where you train.',
+                          Icons.home_work_rounded,
+                          AppTheme.tertiary,
+                          const ['Home', 'Gym', 'Hybrid'],
+                          workoutLocation,
+                          (value) =>
+                              setModalState(() => workoutLocation = value),
+                        ),
+                        const SizedBox(height: 14),
+                        choiceGroup(
+                          'Equipment',
+                          'Avoids exercises you cannot actually set up.',
+                          Icons.fitness_center_rounded,
+                          AppTheme.secondaryContainer,
+                          const ['Bodyweight', 'Bands & Dumbbells', 'Full Gym'],
+                          availableEquipment,
+                          (value) =>
+                              setModalState(() => availableEquipment = value),
+                        ),
+                        const SizedBox(height: 14),
+                        choiceGroup(
+                          'Session Length',
+                          'Matches workout density to your daily schedule.',
+                          Icons.schedule_rounded,
+                          AppTheme.primaryContainer,
+                          const ['20', '30', '45', '60'],
+                          '$sessionDurationMinutes',
+                          (value) => setModalState(
+                            () => sessionDurationMinutes = int.parse(value),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        choiceGroup(
+                          'Focus Area',
+                          'Adds a clear emphasis without losing balance.',
+                          Icons.center_focus_strong_rounded,
+                          AppTheme.tertiary,
+                          const [
+                            'Full Body',
+                            'Upper Body',
+                            'Lower Body',
+                            'Core',
+                            'Back & Posture',
+                          ],
+                          targetMuscleFocus,
+                          (value) =>
+                              setModalState(() => targetMuscleFocus = value),
+                        ),
+                        const SizedBox(height: 14),
+                        choiceGroup(
+                          'Joint Care',
+                          'Steers the plan around sensitive areas when needed.',
+                          Icons.accessibility_new_rounded,
+                          AppTheme.secondaryContainer,
+                          const ['None', 'Knees', 'Lower Back', 'Shoulders'],
+                          jointSensitivity,
+                          (value) =>
+                              setModalState(() => jointSensitivity = value),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () async {
+                              await context.read<UserProvider>().updateProfile(
+                                user.copyWith(
+                                  trainingLevel: trainingLevel,
+                                  workoutLocation: workoutLocation,
+                                  availableEquipment: availableEquipment,
+                                  sessionDurationMinutes:
+                                      sessionDurationMinutes,
+                                  targetMuscleFocus: targetMuscleFocus,
+                                  jointSensitivity: jointSensitivity,
+                                ),
+                              );
+                              if (sheetContext.mounted) {
+                                Navigator.of(sheetContext).pop();
+                              }
+                            },
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: const Text('Save Workout Preferences'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1041,62 +1223,192 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Edit Profile'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
+        final cs = Theme.of(dialogContext).colorScheme;
+
+        Widget profileField({
+          required String label,
+          required IconData icon,
+          required TextEditingController controller,
+          TextInputType? keyboardType,
+        }) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurfaceVariant,
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: ageController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Age'),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.2),
+                  ),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: heightController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Height (cm)'),
+                child: TextField(
+                  controller: controller,
+                  keyboardType: keyboardType,
+                  decoration: InputDecoration(
+                    prefixIcon: Icon(icon, size: 20),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 18,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: weightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Weight (kg)'),
+              ),
+            ],
+          );
+        }
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: cs.outlineVariant.withValues(alpha: 0.2),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 30,
+                  offset: const Offset(0, 14),
                 ),
               ],
             ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryContainer.withValues(
+                            alpha: 0.14,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.edit_note_rounded,
+                          color: AppTheme.primaryContainer,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Edit Profile',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Update the basics that shape your plan and nutrition targets.',
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  profileField(
+                    label: 'Name',
+                    icon: Icons.person_outline,
+                    controller: nameController,
+                  ),
+                  const SizedBox(height: 14),
+                  profileField(
+                    label: 'Age',
+                    icon: Icons.cake_outlined,
+                    controller: ageController,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 14),
+                  profileField(
+                    label: 'Height (cm)',
+                    icon: Icons.height_rounded,
+                    controller: heightController,
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 14),
+                  profileField(
+                    label: 'Weight (kg)',
+                    icon: Icons.monitor_weight_outlined,
+                    controller: weightController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () async {
+                            final updated = user.copyWith(
+                              name: nameController.text.trim().isEmpty
+                                  ? user.name
+                                  : nameController.text.trim(),
+                              age:
+                                  int.tryParse(ageController.text.trim()) ??
+                                  user.age,
+                              height:
+                                  double.tryParse(
+                                    heightController.text.trim(),
+                                  ) ??
+                                  user.height,
+                              weight:
+                                  double.tryParse(
+                                    weightController.text.trim(),
+                                  ) ??
+                                  user.weight,
+                            );
+                            await context.read<UserProvider>().updateProfile(
+                              updated,
+                            );
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop();
+                            }
+                          },
+                          child: const Text('Save'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final updated = user.copyWith(
-                  name: nameController.text.trim().isEmpty
-                      ? user.name
-                      : nameController.text.trim(),
-                  age: int.tryParse(ageController.text.trim()) ?? user.age,
-                  height:
-                      double.tryParse(heightController.text.trim()) ?? user.height,
-                  weight:
-                      double.tryParse(weightController.text.trim()) ?? user.weight,
-                );
-                await context.read<UserProvider>().updateProfile(updated);
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
         );
       },
     );

@@ -67,10 +67,10 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 17,
-                            color: colorScheme.primary,
-                          ),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17,
+                        color: colorScheme.primary,
+                      ),
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
@@ -78,7 +78,8 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
                         subtitle!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                               height: 1.15,
                               fontSize: 10.5,
@@ -91,13 +92,13 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
             ],
           ),
           actions: [
-            Transform.scale(
-              scale: 0.82,
-              child: const DarkModeToggle(),
-            ),
+            Transform.scale(scale: 0.82, child: const DarkModeToggle()),
             if (showNotificationButton)
               IconButton(
-                constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+                constraints: const BoxConstraints.tightFor(
+                  width: 38,
+                  height: 38,
+                ),
                 padding: EdgeInsets.zero,
                 icon: Icon(
                   Icons.notifications_none,
@@ -115,6 +116,8 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   Future<void> _openNotificationSheet(BuildContext context) async {
     final waterProvider = context.read<WaterProvider>();
+    await waterProvider.requestReminderPermissionIfNeeded();
+    if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -133,7 +136,10 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
                   children: [
                     const Text(
                       'Notification Settings',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -167,11 +173,13 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
                       spacing: 10,
                       runSpacing: 10,
                       children: [60, 90, 120].map((minutes) {
-                        final selected = water.reminderIntervalMinutes == minutes;
+                        final selected =
+                            water.reminderIntervalMinutes == minutes;
                         return ChoiceChip(
                           label: Text('$minutes min'),
                           selected: selected,
-                          onSelected: (_) => waterProvider.setReminderIntervalMinutes(minutes),
+                          onSelected: (_) =>
+                              waterProvider.setReminderIntervalMinutes(minutes),
                         );
                       }).toList(),
                     ),

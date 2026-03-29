@@ -43,21 +43,26 @@ class WorkoutRecommendationService {
   }
 
   static String _insight(UserModel profile) {
-    final mobilityNote = profile.sittingHours == '6-8 Hours' ||
+    final mobilityNote =
+        profile.sittingHours == '6-8 Hours' ||
             profile.sittingHours == '8+ Hours'
         ? 'Extra mobility is included because you spend long hours sitting.'
         : 'Warm-ups stay efficient so you can get into the session quickly.';
 
     final equipmentNote = switch (profile.availableEquipment) {
       'Bodyweight' => 'Movements stay simple and home-friendly.',
-      'Bands & Dumbbells' => 'Band and dumbbell options are mixed in for progression.',
+      'Bands & Dumbbells' =>
+        'Band and dumbbell options are mixed in for progression.',
       _ => 'Gym equipment opens up more loading options and variety.',
     };
 
     final jointNote = switch (profile.jointSensitivity) {
-      'Knees' => 'Knee-sensitive choices reduce high-impact and deep flexion stress.',
-      'Lower Back' => 'Lower-back friendly cues and core stability are prioritized.',
-      'Shoulders' => 'Shoulder-sensitive variations avoid aggressive overhead volume.',
+      'Knees' =>
+        'Knee-sensitive choices reduce high-impact and deep flexion stress.',
+      'Lower Back' =>
+        'Lower-back friendly cues and core stability are prioritized.',
+      'Shoulders' =>
+        'Shoulder-sensitive variations avoid aggressive overhead volume.',
       _ => 'You have no reported joint limitations, so variety stays higher.',
     };
 
@@ -76,7 +81,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: _titleWithFocus(profile, 'Full Body Strength'),
-        description: 'One efficient session for strength, posture, and core control.',
+        description:
+            'One efficient session for strength, posture, and core control.',
         calories: 280,
         exercises: [
           _lowerPrimary(profile),
@@ -89,7 +95,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: _titleWithFocus(profile, 'Conditioning Reset'),
-        description: 'A shorter home-friendly circuit to build weekly momentum.',
+        description:
+            'A shorter home-friendly circuit to build weekly momentum.',
         calories: 255,
         exercises: [
           _unilateralLower(profile),
@@ -109,8 +116,13 @@ class WorkoutRecommendationService {
     return [
       _trainingDay(
         profile: profile,
-        title: _goalBasedTitle(profile, 'Full Body Strength', 'Strength Base Day'),
-        description: 'A strong foundation day with simple, high-value movements.',
+        title: _goalBasedTitle(
+          profile,
+          'Full Body Strength',
+          'Strength Base Day',
+        ),
+        description:
+            'A strong foundation day with simple, high-value movements.',
         calories: 300,
         exercises: [
           _focusLead(profile),
@@ -123,7 +135,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: _focusSessionTitle(profile),
-        description: 'This session leans into your selected focus area without losing balance.',
+        description:
+            'This session leans into your selected focus area without losing balance.',
         calories: 310,
         exercises: [
           _secondaryFocus(profile),
@@ -135,8 +148,13 @@ class WorkoutRecommendationService {
       _restDay(profile, 'Stretch + Mobility'),
       _trainingDay(
         profile: profile,
-        title: _goalBasedTitle(profile, 'Conditioning Finish', 'Athletic Capacity Day'),
-        description: 'A tighter, higher-tempo day that matches your goal and available time.',
+        title: _goalBasedTitle(
+          profile,
+          'Conditioning Finish',
+          'Athletic Capacity Day',
+        ),
+        description:
+            'A tighter, higher-tempo day that matches your goal and available time.',
         calories: 320,
         exercises: [
           _conditioningPrimary(profile),
@@ -155,7 +173,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: 'Upper Body Push',
-        description: 'Pressing work tuned to your equipment and shoulder comfort.',
+        description:
+            'Pressing work tuned to your equipment and shoulder comfort.',
         calories: 320,
         exercises: [
           _pushPrimary(profile),
@@ -167,7 +186,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: 'Lower Body Strength',
-        description: 'Leg work adjusted for your level, location, and joint needs.',
+        description:
+            'Leg work adjusted for your level, location, and joint needs.',
         calories: 350,
         exercises: [
           _lowerPrimary(profile),
@@ -180,7 +200,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: 'Upper Body Pull',
-        description: 'Back, arm, and posture work to support performance and shape.',
+        description:
+            'Back, arm, and posture work to support performance and shape.',
         calories: 300,
         exercises: [
           _pullPrimary(profile),
@@ -192,7 +213,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: _goalBasedTitle(profile, 'Conditioning + Core', 'Power Finish'),
-        description: 'A final punchy day to round out the week without dragging recovery down.',
+        description:
+            'A final punchy day to round out the week without dragging recovery down.',
         calories: 330,
         exercises: [
           _conditioningPrimary(profile),
@@ -211,7 +233,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: 'Push Day',
-        description: 'Chest, shoulders, and triceps with level-appropriate loading.',
+        description:
+            'Chest, shoulders, and triceps with level-appropriate loading.',
         calories: 330,
         exercises: [
           _pushPrimary(profile),
@@ -235,7 +258,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: 'Leg Day',
-        description: 'Lower-body work scaled around your joint tolerance and equipment.',
+        description:
+            'Lower-body work scaled around your joint tolerance and equipment.',
         calories: 370,
         exercises: [
           _lowerPrimary(profile),
@@ -260,7 +284,8 @@ class WorkoutRecommendationService {
       _trainingDay(
         profile: profile,
         title: 'Recovery Strength',
-        description: 'A lighter full-body session so you keep momentum without accumulating fatigue.',
+        description:
+            'A lighter full-body session so you keep momentum without accumulating fatigue.',
         calories: 240,
         exercises: [
           _glutePrimary(profile),
@@ -295,12 +320,17 @@ class WorkoutRecommendationService {
   static WorkoutDayPlan _restDay(UserModel profile, String title) {
     return WorkoutDayPlan(
       title: title,
-      description: 'Light movement, stretching, and recovery work matched to your weekly load.',
+      description:
+          'Light movement, stretching, and recovery work matched to your weekly load.',
       durationMinutes: profile.sessionDurationMinutes <= 20 ? 12 : 20,
       estimatedCalories: 90,
       isRestDay: true,
       exercises: [
-        _exercise('Mobility Flow', '10 minutes', 'Move gently, breathe deeply, and reset tight areas.'),
+        _exercise(
+          'Mobility Flow',
+          '10 minutes',
+          'Move gently, breathe deeply, and reset tight areas.',
+        ),
       ],
     );
   }
@@ -322,7 +352,11 @@ class WorkoutRecommendationService {
     return base;
   }
 
-  static String _goalBasedTitle(UserModel profile, String standard, String athletic) {
+  static String _goalBasedTitle(
+    UserModel profile,
+    String standard,
+    String athletic,
+  ) {
     return profile.fitnessGoal == 'Improve Stamina' ? athletic : standard;
   }
 
@@ -373,132 +407,293 @@ class WorkoutRecommendationService {
 
   static WorkoutExercise _pushPrimary(UserModel profile) {
     if (profile.jointSensitivity == 'Shoulders') {
-      return _exercise('Incline Push-Up', '3 sets · 10-12 reps', 'Keep your ribs tucked and move smoothly.');
+      return _exercise(
+        'Incline Push-Up',
+        '3 sets · 10-12 reps',
+        'Keep your ribs tucked and move smoothly.',
+      );
     }
-    if (profile.availableEquipment == 'Full Gym' && profile.trainingLevel != 'Beginner') {
-      return _exercise('Bench Press', '4 sets · 6-8 reps', 'Lower with control and press from a stable base.');
+    if (profile.availableEquipment == 'Full Gym' &&
+        profile.trainingLevel != 'Beginner') {
+      return _exercise(
+        'Bench Press',
+        '4 sets · 6-8 reps',
+        'Lower with control and press from a stable base.',
+      );
     }
     if (profile.availableEquipment == 'Bands & Dumbbells') {
-      return _exercise('Dumbbell Floor Press', '4 sets · 8-10 reps', 'Keep wrists stacked and control the lowering.');
+      return _exercise(
+        'Dumbbell Floor Press',
+        '4 sets · 8-10 reps',
+        'Keep wrists stacked and control the lowering.',
+      );
     }
-    return _exercise('Push-Up', '4 sets · 8-12 reps', 'Keep your body in one long line.');
+    return _exercise(
+      'Push-Up',
+      '4 sets · 8-12 reps',
+      'Keep your body in one long line.',
+    );
   }
 
   static WorkoutExercise _pushSecondary(UserModel profile) {
     if (profile.jointSensitivity == 'Shoulders') {
-      return _exercise('Wall Push-Up', '3 sets · 12 reps', 'Stay tall through the chest and move pain-free.');
+      return _exercise(
+        'Wall Push-Up',
+        '3 sets · 12 reps',
+        'Stay tall through the chest and move pain-free.',
+      );
     }
     if (profile.availableEquipment == 'Full Gym') {
-      return _exercise('Shoulder Press', '3 sets · 10 reps', 'Brace before every press.');
+      return _exercise(
+        'Shoulder Press',
+        '3 sets · 10 reps',
+        'Brace before every press.',
+      );
     }
     if (profile.availableEquipment == 'Bands & Dumbbells') {
-      return _exercise('Dumbbell Shoulder Press', '3 sets · 10 reps', 'Press up without shrugging.');
+      return _exercise(
+        'Dumbbell Shoulder Press',
+        '3 sets · 10 reps',
+        'Press up without shrugging.',
+      );
     }
-    return _exercise('Incline Push-Up', '3 sets · 12 reps', 'Stay strong through the core.');
+    return _exercise(
+      'Incline Push-Up',
+      '3 sets · 12 reps',
+      'Stay strong through the core.',
+    );
   }
 
   static WorkoutExercise _pullPrimary(UserModel profile) {
     if (profile.availableEquipment == 'Full Gym') {
-      return _exercise('Lat Pulldown', '4 sets · 10 reps', 'Lead with your elbows and keep the chest proud.');
+      return _exercise(
+        'Lat Pulldown',
+        '4 sets · 10 reps',
+        'Lead with your elbows and keep the chest proud.',
+      );
     }
     if (profile.availableEquipment == 'Bands & Dumbbells') {
-      return _exercise('Dumbbell Row', '4 sets · 10 each side', 'Pull to the hip and pause at the top.');
+      return _exercise(
+        'Dumbbell Row',
+        '4 sets · 10 each side',
+        'Pull to the hip and pause at the top.',
+      );
     }
-    return _exercise('Band Pull-Apart', '4 sets · 15 reps', 'Open through the chest and squeeze the upper back.');
+    return _exercise(
+      'Band Pull-Apart',
+      '4 sets · 15 reps',
+      'Open through the chest and squeeze the upper back.',
+    );
   }
 
   static WorkoutExercise _pullSecondary(UserModel profile) {
     if (profile.availableEquipment == 'Full Gym') {
-      return _exercise('Seated Row', '3 sets · 10-12 reps', 'Pull shoulders down and back.');
+      return _exercise(
+        'Seated Row',
+        '3 sets · 10-12 reps',
+        'Pull shoulders down and back.',
+      );
     }
     if (profile.availableEquipment == 'Bands & Dumbbells') {
-      return _exercise('Hammer Curl', '3 sets · 12 reps', 'Control the lowering and avoid swinging.');
+      return _exercise(
+        'Hammer Curl',
+        '3 sets · 12 reps',
+        'Control the lowering and avoid swinging.',
+      );
     }
-    return _exercise('Prone Back Extension', '3 sets · 12 reps', 'Lift from the upper back, not the neck.');
+    return _exercise(
+      'Prone Back Extension',
+      '3 sets · 12 reps',
+      'Lift from the upper back, not the neck.',
+    );
   }
 
   static WorkoutExercise _lowerPrimary(UserModel profile) {
     if (profile.jointSensitivity == 'Knees') {
-      return _exercise('Glute Bridge', '4 sets · 12 reps', 'Drive through the heels and pause at the top.');
+      return _exercise(
+        'Glute Bridge',
+        '4 sets · 12 reps',
+        'Drive through the heels and pause at the top.',
+      );
     }
-    if (profile.availableEquipment == 'Full Gym' && profile.trainingLevel != 'Beginner') {
-      return _exercise('Back Squat', '4 sets · 6-8 reps', 'Brace before every rep and stay stacked.');
+    if (profile.availableEquipment == 'Full Gym' &&
+        profile.trainingLevel != 'Beginner') {
+      return _exercise(
+        'Back Squat',
+        '4 sets · 6-8 reps',
+        'Brace before every rep and stay stacked.',
+      );
     }
     if (profile.availableEquipment == 'Bands & Dumbbells') {
-      return _exercise('Goblet Squat', '4 sets · 10 reps', 'Stay upright and balanced through the foot.');
+      return _exercise(
+        'Goblet Squat',
+        '4 sets · 10 reps',
+        'Stay upright and balanced through the foot.',
+      );
     }
-    return _exercise('Bodyweight Squat', '4 sets · 12 reps', 'Sit down between the hips and stand tall.');
+    return _exercise(
+      'Bodyweight Squat',
+      '4 sets · 12 reps',
+      'Sit down between the hips and stand tall.',
+    );
   }
 
   static WorkoutExercise _unilateralLower(UserModel profile) {
     if (profile.jointSensitivity == 'Knees') {
-      return _exercise('Step-Up', '3 sets · 10 each side', 'Use a low step and push through the whole foot.');
+      return _exercise(
+        'Step-Up',
+        '3 sets · 10 each side',
+        'Use a low step and push through the whole foot.',
+      );
     }
-    if (profile.availableEquipment == 'Full Gym' || profile.availableEquipment == 'Bands & Dumbbells') {
-      return _exercise('Reverse Lunge', '3 sets · 10 each side', 'Step back softly and keep the front heel grounded.');
+    if (profile.availableEquipment == 'Full Gym' ||
+        profile.availableEquipment == 'Bands & Dumbbells') {
+      return _exercise(
+        'Reverse Lunge',
+        '3 sets · 10 each side',
+        'Step back softly and keep the front heel grounded.',
+      );
     }
-    return _exercise('Split Squat', '3 sets · 10 each side', 'Stay upright and move under control.');
+    return _exercise(
+      'Split Squat',
+      '3 sets · 10 each side',
+      'Stay upright and move under control.',
+    );
   }
 
   static WorkoutExercise _glutePrimary(UserModel profile) {
-    if (profile.availableEquipment == 'Full Gym' && profile.trainingLevel == 'Advanced') {
-      return _exercise('Romanian Deadlift', '3 sets · 8 reps', 'Hinge through the hips and keep the spine long.');
+    if (profile.availableEquipment == 'Full Gym' &&
+        profile.trainingLevel == 'Advanced') {
+      return _exercise(
+        'Romanian Deadlift',
+        '3 sets · 8 reps',
+        'Hinge through the hips and keep the spine long.',
+      );
     }
     if (profile.jointSensitivity == 'Lower Back') {
-      return _exercise('Glute Bridge', '4 sets · 12 reps', 'Brace lightly and finish with a glute squeeze.');
+      return _exercise(
+        'Glute Bridge',
+        '4 sets · 12 reps',
+        'Brace lightly and finish with a glute squeeze.',
+      );
     }
-    return _exercise('Glute Bridge', '4 sets · 12 reps', 'Drive through the heels and squeeze the glutes at the top.');
+    return _exercise(
+      'Glute Bridge',
+      '4 sets · 12 reps',
+      'Drive through the heels and squeeze the glutes at the top.',
+    );
   }
 
   static WorkoutExercise _corePrimary(UserModel profile) {
     if (profile.jointSensitivity == 'Lower Back') {
-      return _exercise('Dead Bug', '3 sets · 12 reps', 'Keep the lower back gently pressed down.');
+      return _exercise(
+        'Dead Bug',
+        '3 sets · 12 reps',
+        'Keep the lower back gently pressed down.',
+      );
     }
     if (profile.trainingLevel == 'Advanced') {
-      return _exercise('Plank Shoulder Taps', '3 sets · 20 taps', 'Minimize hip sway on every reach.');
+      return _exercise(
+        'Plank Shoulder Taps',
+        '3 sets · 20 taps',
+        'Minimize hip sway on every reach.',
+      );
     }
-    return _exercise('Forearm Plank', '3 sets · 40 sec', 'Brace the abs and breathe behind the shield.');
+    return _exercise(
+      'Forearm Plank',
+      '3 sets · 40 sec',
+      'Brace the abs and breathe behind the shield.',
+    );
   }
 
   static WorkoutExercise _coreSecondary(UserModel profile) {
     if (profile.jointSensitivity == 'Lower Back') {
-      return _exercise('Bird Dog', '3 sets · 10 each side', 'Reach long and keep the torso quiet.');
+      return _exercise(
+        'Bird Dog',
+        '3 sets · 10 each side',
+        'Reach long and keep the torso quiet.',
+      );
     }
-    return _exercise('Hollow Hold', '3 sets · 30 sec', 'Flatten the lower back before lifting.');
+    return _exercise(
+      'Hollow Hold',
+      '3 sets · 30 sec',
+      'Flatten the lower back before lifting.',
+    );
   }
 
   static WorkoutExercise _conditioningPrimary(UserModel profile) {
     if (profile.jointSensitivity == 'Knees') {
-      return _exercise('Fast March', '6 rounds · 40 sec', 'Pump the arms and keep the pace steady.');
+      return _exercise(
+        'Fast March',
+        '6 rounds · 40 sec',
+        'Pump the arms and keep the pace steady.',
+      );
     }
     if (profile.availableEquipment == 'Full Gym') {
-      return _exercise('Bike Erg', '6 rounds · 40 sec', 'Push hard, then recover fully.');
+      return _exercise(
+        'Bike Erg',
+        '6 rounds · 40 sec',
+        'Push hard, then recover fully.',
+      );
     }
-    return _exercise('Mountain Climber', '4 rounds · 30 sec', 'Move with rhythm and keep the hips low.');
+    return _exercise(
+      'Mountain Climber',
+      '4 rounds · 30 sec',
+      'Move with rhythm and keep the hips low.',
+    );
   }
 
   static WorkoutExercise _carryOrCore(UserModel profile) {
-    if (profile.availableEquipment == 'Full Gym' || profile.availableEquipment == 'Bands & Dumbbells') {
-      return _exercise('Farmer Carry', '4 rounds · 30 sec', 'Stand tall and let the core do the stabilizing.');
+    if (profile.availableEquipment == 'Full Gym' ||
+        profile.availableEquipment == 'Bands & Dumbbells') {
+      return _exercise(
+        'Farmer Carry',
+        '4 rounds · 30 sec',
+        'Stand tall and let the core do the stabilizing.',
+      );
     }
-    return _exercise('Dead Bug', '3 sets · 12 reps', 'Move slowly and own the exhale.');
+    return _exercise(
+      'Dead Bug',
+      '3 sets · 12 reps',
+      'Move slowly and own the exhale.',
+    );
   }
 
   static WorkoutExercise _upperAccessory(UserModel profile) {
     if (profile.jointSensitivity == 'Shoulders') {
-      return _exercise('Band External Rotation', '3 sets · 12 reps', 'Rotate from the shoulder without flaring the ribs.');
+      return _exercise(
+        'Band External Rotation',
+        '3 sets · 12 reps',
+        'Rotate from the shoulder without flaring the ribs.',
+      );
     }
     if (profile.availableEquipment == 'Full Gym') {
-      return _exercise('Lateral Raise', '3 sets · 15 reps', 'Lift to shoulder height without shrugging.');
+      return _exercise(
+        'Lateral Raise',
+        '3 sets · 15 reps',
+        'Lift to shoulder height without shrugging.',
+      );
     }
-    return _exercise('Pike Push-Up', '3 sets · 8 reps', 'Shift weight forward and stay long through the spine.');
+    return _exercise(
+      'Pike Push-Up',
+      '3 sets · 8 reps',
+      'Shift weight forward and stay long through the spine.',
+    );
   }
 
   static WorkoutExercise _postureAccessory(UserModel profile) {
     if (profile.availableEquipment == 'Full Gym') {
-      return _exercise('Face Pull', '3 sets · 15 reps', 'Finish with elbows high and shoulder blades back.');
+      return _exercise(
+        'Face Pull',
+        '3 sets · 15 reps',
+        'Finish with elbows high and shoulder blades back.',
+      );
     }
-    return _exercise('Band Pull-Apart', '3 sets · 20 reps', 'Spread the band and keep the neck relaxed.');
+    return _exercise(
+      'Band Pull-Apart',
+      '3 sets · 20 reps',
+      'Spread the band and keep the neck relaxed.',
+    );
   }
 
   static WorkoutExercise _exercise(
@@ -506,13 +701,15 @@ class WorkoutRecommendationService {
     String prescription,
     String cue,
   ) {
-    final metadata = _exerciseCatalog[name] ?? _exerciseCatalog['Mobility Flow']!;
+    final metadata =
+        _exerciseCatalog[name] ?? _exerciseCatalog['Mobility Flow']!;
     return WorkoutExercise(
       name: name,
       prescription: prescription,
       cue: cue,
       animationAsset: metadata.animationAsset,
       animationType: metadata.animationType,
+      animationFrames: metadata.animationFrames,
       primaryMuscles: metadata.primaryMuscles,
       secondaryMuscles: metadata.secondaryMuscles,
       bodyMapZones: metadata.bodyMapZones,
@@ -531,6 +728,7 @@ class WorkoutRecommendationService {
 class _ExerciseMetadata {
   final String animationAsset;
   final String animationType;
+  final List<String> animationFrames;
   final List<String> primaryMuscles;
   final List<String> secondaryMuscles;
   final List<String> bodyMapZones;
@@ -541,6 +739,7 @@ class _ExerciseMetadata {
   const _ExerciseMetadata({
     required this.animationAsset,
     this.animationType = 'lottie',
+    this.animationFrames = const [],
     required this.primaryMuscles,
     this.secondaryMuscles = const [],
     this.bodyMapZones = const [],
@@ -554,6 +753,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   'Push-Up': _ExerciseMetadata(
     animationAsset: 'assets/animations/clap_push_up.gif',
     animationType: 'gif',
+    animationFrames: _frames('Push-Up_Wide'),
     primaryMuscles: ['Chest', 'Triceps'],
     secondaryMuscles: ['Front Delts', 'Core'],
     bodyMapZones: ['chest', 'triceps', 'core'],
@@ -564,6 +764,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   'Incline Push-Up': _ExerciseMetadata(
     animationAsset: 'assets/animations/clap_push_up.gif',
     animationType: 'gif',
+    animationFrames: _frames('Incline_Push-Up'),
     primaryMuscles: ['Chest', 'Triceps'],
     secondaryMuscles: ['Shoulders', 'Core'],
     bodyMapZones: ['chest', 'triceps', 'frontShoulders'],
@@ -574,6 +775,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   'Wall Push-Up': _ExerciseMetadata(
     animationAsset: 'assets/animations/clap_push_up.gif',
     animationType: 'gif',
+    animationFrames: _frames('Incline_Push-Up'),
     primaryMuscles: ['Chest'],
     secondaryMuscles: ['Triceps', 'Front Delts'],
     bodyMapZones: ['chest', 'triceps'],
@@ -583,6 +785,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Bench Press': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_push.json',
+    animationFrames: _frames('Bench_Press_-_Powerlifting'),
     primaryMuscles: ['Chest', 'Triceps'],
     secondaryMuscles: ['Front Delts'],
     bodyMapZones: ['chest', 'triceps', 'frontShoulders'],
@@ -592,6 +795,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Dumbbell Floor Press': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_push.json',
+    animationFrames: _frames('Dumbbell_Floor_Press'),
     primaryMuscles: ['Chest', 'Triceps'],
     secondaryMuscles: ['Front Delts'],
     bodyMapZones: ['chest', 'triceps'],
@@ -601,6 +805,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Shoulder Press': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_push.json',
+    animationFrames: _frames('Barbell_Shoulder_Press'),
     primaryMuscles: ['Shoulders'],
     secondaryMuscles: ['Triceps', 'Upper Chest'],
     bodyMapZones: ['frontShoulders', 'triceps'],
@@ -610,6 +815,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Dumbbell Shoulder Press': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_push.json',
+    animationFrames: _frames('Dumbbell_Shoulder_Press'),
     primaryMuscles: ['Shoulders'],
     secondaryMuscles: ['Triceps'],
     bodyMapZones: ['frontShoulders', 'triceps'],
@@ -637,6 +843,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Lat Pulldown': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_pull.json',
+    animationFrames: _frames('Wide-Grip_Lat_Pulldown'),
     primaryMuscles: ['Lats'],
     secondaryMuscles: ['Biceps', 'Mid Back'],
     bodyMapZones: ['lats', 'midBack', 'biceps'],
@@ -646,6 +853,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Dumbbell Row': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_pull.json',
+    animationFrames: _frames('One-Arm_Dumbbell_Row'),
     primaryMuscles: ['Lats', 'Mid Back'],
     secondaryMuscles: ['Biceps'],
     bodyMapZones: ['lats', 'midBack', 'biceps'],
@@ -655,6 +863,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Band Pull-Apart': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_pull.json',
+    animationFrames: _frames('Band_Pull_Apart'),
     primaryMuscles: ['Rear Delts', 'Upper Back'],
     secondaryMuscles: ['Mid Back'],
     bodyMapZones: ['rearShoulders', 'upperBack'],
@@ -664,6 +873,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Seated Row': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_pull.json',
+    animationFrames: _frames('Seated_Cable_Rows'),
     primaryMuscles: ['Mid Back', 'Lats'],
     secondaryMuscles: ['Biceps'],
     bodyMapZones: ['midBack', 'lats', 'biceps'],
@@ -673,6 +883,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Hammer Curl': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_pull.json',
+    animationFrames: _frames('Hammer_Curls'),
     primaryMuscles: ['Biceps', 'Forearms'],
     secondaryMuscles: ['Brachialis'],
     bodyMapZones: ['biceps', 'forearms'],
@@ -691,6 +902,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Face Pull': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_pull.json',
+    animationFrames: _frames('Face_Pull'),
     primaryMuscles: ['Rear Delts', 'Upper Back'],
     secondaryMuscles: ['Rotator Cuff'],
     bodyMapZones: ['rearShoulders', 'upperBack'],
@@ -700,6 +912,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Bodyweight Squat': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_squat.json',
+    animationFrames: _frames('Bodyweight_Squat'),
     primaryMuscles: ['Quads', 'Glutes'],
     secondaryMuscles: ['Core'],
     bodyMapZones: ['quads', 'glutes', 'core'],
@@ -709,6 +922,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Goblet Squat': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_squat.json',
+    animationFrames: _frames('Goblet_Squat'),
     primaryMuscles: ['Quads', 'Glutes'],
     secondaryMuscles: ['Core', 'Adductors'],
     bodyMapZones: ['quads', 'glutes', 'core'],
@@ -727,6 +941,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Split Squat': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_squat.json',
+    animationFrames: _frames('Split_Squats'),
     primaryMuscles: ['Quads', 'Glutes'],
     secondaryMuscles: ['Core'],
     bodyMapZones: ['quads', 'glutes'],
@@ -736,6 +951,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Reverse Lunge': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_squat.json',
+    animationFrames: _frames('Crossover_Reverse_Lunge'),
     primaryMuscles: ['Glutes', 'Quads'],
     secondaryMuscles: ['Hamstrings'],
     bodyMapZones: ['glutes', 'quads', 'hamstrings'],
@@ -745,6 +961,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Step-Up': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_squat.json',
+    animationFrames: _frames('Dumbbell_Step_Ups'),
     primaryMuscles: ['Quads', 'Glutes'],
     secondaryMuscles: ['Calves'],
     bodyMapZones: ['quads', 'glutes', 'calves'],
@@ -763,6 +980,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Romanian Deadlift': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_squat.json',
+    animationFrames: _frames('Romanian_Deadlift'),
     primaryMuscles: ['Hamstrings', 'Glutes'],
     secondaryMuscles: ['Lower Back'],
     bodyMapZones: ['hamstrings', 'glutes', 'lowerBack'],
@@ -781,6 +999,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Forearm Plank': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_core.json',
+    animationFrames: _frames('Plank'),
     primaryMuscles: ['Core'],
     secondaryMuscles: ['Shoulders', 'Glutes'],
     bodyMapZones: ['core', 'frontShoulders'],
@@ -799,6 +1018,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Dead Bug': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_core.json',
+    animationFrames: _frames('Dead_Bug'),
     primaryMuscles: ['Core'],
     secondaryMuscles: ['Hip Flexors'],
     bodyMapZones: ['core'],
@@ -826,6 +1046,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Mountain Climber': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_cardio.json',
+    animationFrames: _frames('Mountain_Climbers'),
     primaryMuscles: ['Core', 'Shoulders'],
     secondaryMuscles: ['Hip Flexors'],
     bodyMapZones: ['core', 'frontShoulders'],
@@ -853,6 +1074,7 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
   ),
   'Farmer Carry': _ExerciseMetadata(
     animationAsset: 'assets/animations/exercise_core.json',
+    animationFrames: _frames('Farmers_Walk'),
     primaryMuscles: ['Core', 'Forearms'],
     secondaryMuscles: ['Traps'],
     bodyMapZones: ['core', 'forearms', 'upperBack'],
@@ -879,3 +1101,10 @@ const Map<String, _ExerciseMetadata> _exerciseCatalog = {
     movementPattern: 'Recovery',
   ),
 };
+
+List<String> _frames(String folder) {
+  return [
+    'assets/database/exercise_frames/$folder/0.jpg',
+    'assets/database/exercise_frames/$folder/1.jpg',
+  ];
+}
