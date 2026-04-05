@@ -9,12 +9,14 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final String? subtitle;
   final bool showNotificationButton;
+  final VoidCallback? onAvatarTap;
 
   const TopAppBar({
     super.key,
     required this.title,
     this.subtitle,
     this.showNotificationButton = true,
+    this.onAvatarTap,
   });
 
   @override
@@ -46,13 +48,23 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           title: Row(
             children: [
-              CircleAvatar(
-                radius: 17,
-                backgroundColor: _avatarColor(user?.avatarKey),
-                child: Icon(
-                  _avatarIcon(user?.avatarKey),
-                  size: 18,
-                  color: Colors.white,
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onAvatarTap,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: CircleAvatar(
+                      radius: 17,
+                      backgroundColor: _avatarColor(user?.avatarKey),
+                      child: Icon(
+                        _avatarIcon(user?.avatarKey),
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),

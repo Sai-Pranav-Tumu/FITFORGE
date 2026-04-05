@@ -67,7 +67,7 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
           : SingleChildScrollView(
               padding: const EdgeInsets.only(
                 top: 16,
-                bottom: 120,
+                bottom: 28,
                 left: 16,
                 right: 16,
               ),
@@ -1043,13 +1043,154 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
     );
   }
 
+  Widget _buildEmptySearchState(
+    BuildContext context, {
+    required Color accent,
+    required bool keyboardVisible,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final query = _queryController.text.trim();
+
+    return Container(
+      constraints: BoxConstraints(minHeight: keyboardVisible ? 160 : 240),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.18)),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: keyboardVisible ? 56 : 64,
+              height: keyboardVisible ? 56 : 64,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.restaurant_menu_rounded,
+                color: accent,
+                size: keyboardVisible ? 26 : 30,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              query.isEmpty
+                  ? 'Start typing to search foods'
+                  : 'No items found for "$query"',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: cs.onSurfaceVariant, height: 1.4),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              query.isEmpty
+                  ? 'Matching foods will appear here while you type.'
+                  : 'Try a shorter name or a different spelling.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.76),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchResultCard(
+    BuildContext context,
+    FoodItem food, {
+    required bool selected,
+    required Color accent,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: selected
+          ? accent.withValues(alpha: 0.14)
+          : cs.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => setState(() => _selected = food),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: selected ? accent : cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.restaurant_menu,
+                  size: 18,
+                  color: selected ? Colors.white : cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      food.foodName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${food.calories.toStringAsFixed(0)} kcal | P ${food.protein.toStringAsFixed(1)} | C ${food.carbs.toStringAsFixed(1)} | F ${food.fat.toStringAsFixed(1)} (100g)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              AnimatedScale(
+                duration: const Duration(milliseconds: 180),
+                scale: selected ? 1 : 0.9,
+                child: Icon(
+                  selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: selected ? accent : cs.outline,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final viewInsets = media.viewInsets.bottom;
-    final maxHeight = media.size.height - viewInsets - 10;
+    final keyboardVisible = viewInsets > 0;
+    final maxHeight = media.size.height * (keyboardVisible ? 0.94 : 0.86);
     final cs = Theme.of(context).colorScheme;
     final accent = _accentColor();
+    final query = _queryController.text.trim();
+    final statusText = _loading
+        ? 'Searching foods...'
+        : query.isEmpty
+        ? 'Search by food name'
+        : _results.isEmpty
+        ? 'No matches yet'
+        : '${_results.length} foods found';
 
     return SafeArea(
       child: AnimatedPadding(
@@ -1078,7 +1219,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(18),
+                  padding: EdgeInsets.all(keyboardVisible ? 14 : 18),
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(22),
@@ -1087,8 +1228,8 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                   child: Row(
                     children: [
                       Container(
-                        width: 48,
-                        height: 48,
+                        width: keyboardVisible ? 42 : 48,
+                        height: keyboardVisible ? 42 : 48,
                         decoration: BoxDecoration(
                           color: accent.withValues(alpha: 0.16),
                           borderRadius: BorderRadius.circular(16),
@@ -1102,20 +1243,22 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                           children: [
                             Text(
                               'Add ${widget.mealType.label} Food',
-                              style: const TextStyle(
-                                fontSize: 21,
+                              style: TextStyle(
+                                fontSize: keyboardVisible ? 19 : 21,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _headerSubtitle(),
-                              style: TextStyle(
-                                color: cs.onSurfaceVariant,
-                                fontSize: 12.5,
-                                height: 1.35,
+                            if (!keyboardVisible) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                _headerSubtitle(),
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 12.5,
+                                  height: 1.35,
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -1123,11 +1266,16 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Expanded(
+                child: ListView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    keyboardVisible ? 14 : 18,
+                    16,
+                    keyboardVisible ? 12 : 16,
+                  ),
                   children: [
                     _fieldLabel(context, 'Food Search'),
                     const SizedBox(height: 8),
@@ -1143,7 +1291,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                         decoration: InputDecoration(
                           hintText: 'Search food (dosa, idli, paneer...)',
                           prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _queryController.text.trim().isEmpty
+                          suffixIcon: query.isEmpty
                               ? null
                               : IconButton(
                                   onPressed: () {
@@ -1161,15 +1309,7 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    const SizedBox(height: 14),
                     _fieldLabel(context, 'Quantity (grams)'),
                     const SizedBox(height: 8),
                     _inputShell(
@@ -1188,174 +1328,88 @@ class _AddFoodDialogState extends State<_AddFoodDialog> {
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: _loading
-                    ? Padding(
-                        key: const ValueKey('loading'),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: LinearProgressIndicator(
-                          minHeight: 3,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      )
-                    : const SizedBox(key: ValueKey('idle'), height: 3),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        _results.isEmpty
-                            ? 'No matches yet'
-                            : '${_results.length} foods found',
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    const SizedBox(height: 10),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: _loading
+                          ? Padding(
+                              key: const ValueKey('loading'),
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: LinearProgressIndicator(
+                                minHeight: 3,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            )
+                          : const SizedBox(key: ValueKey('idle'), height: 3),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: _results.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 28),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 64,
-                                height: 64,
-                                decoration: BoxDecoration(
-                                  color: accent.withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  Icons.restaurant_menu_rounded,
-                                  color: accent,
-                                  size: 30,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _queryController.text.trim().isEmpty
-                                    ? 'Start typing to search foods'
-                                    : 'No items found for "${_queryController.text.trim()}"',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: cs.onSurfaceVariant,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: TextStyle(
+                              color: accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                        itemCount: _results.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final food = _results[index];
-                          final selected = _selected?.id == food.id;
-                          return Material(
-                            color: selected
-                                ? accent.withValues(alpha: 0.14)
-                                : cs.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(16),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () => setState(() => _selected = food),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 38,
-                                      height: 38,
-                                      decoration: BoxDecoration(
-                                        color: selected
-                                            ? accent
-                                            : cs.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Icon(
-                                        Icons.restaurant_menu,
-                                        size: 18,
-                                        color: selected
-                                            ? Colors.white
-                                            : cs.onSurfaceVariant,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            food.foodName,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${food.calories.toStringAsFixed(0)} kcal | P ${food.protein.toStringAsFixed(1)} | C ${food.carbs.toStringAsFixed(1)} | F ${food.fat.toStringAsFixed(1)} (100g)',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: cs.onSurfaceVariant,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    AnimatedScale(
-                                      duration: const Duration(
-                                        milliseconds: 180,
-                                      ),
-                                      scale: selected ? 1 : 0.9,
-                                      child: Icon(
-                                        selected
-                                            ? Icons.check_circle
-                                            : Icons.radio_button_unchecked,
-                                        color: selected ? accent : cs.outline,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                        if (query.isNotEmpty &&
+                            _results.isNotEmpty &&
+                            !_loading) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Tap a food below to select it.',
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 12,
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (_results.isEmpty)
+                      _buildEmptySearchState(
+                        context,
+                        accent: accent,
+                        keyboardVisible: keyboardVisible,
+                      )
+                    else
+                      ..._results.map((food) {
+                        final selected = _selected?.id == food.id;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildSearchResultCard(
+                            context,
+                            food,
+                            selected: selected,
+                            accent: accent,
+                          ),
+                        );
+                      }),
+                  ],
+                ),
               ),
               Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  12,
+                  16,
+                  keyboardVisible ? 12 : 16,
+                ),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHigh.withValues(alpha: 0.55),
                   border: Border(

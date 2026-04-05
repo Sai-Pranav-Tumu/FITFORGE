@@ -9,8 +9,13 @@ import '../../theme/app_theme.dart';
 
 class WorkoutSessionScreen extends StatefulWidget {
   final WorkoutDayPlan plan;
+  final int initialExerciseIndex;
 
-  const WorkoutSessionScreen({super.key, required this.plan});
+  const WorkoutSessionScreen({
+    super.key,
+    required this.plan,
+    this.initialExerciseIndex = 0,
+  });
 
   @override
   State<WorkoutSessionScreen> createState() => _WorkoutSessionScreenState();
@@ -34,6 +39,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.plan.exercises.isNotEmpty) {
+      _exerciseIndex = widget.initialExerciseIndex.clamp(
+        0,
+        widget.plan.exercises.length - 1,
+      );
+    }
     _configureCurrentExercise(resetElapsed: true, resetCycle: true);
   }
 
@@ -350,7 +361,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                     Text(
                       'CURRENT EXERCISE',
                       style: TextStyle(
-                        color: AppTheme.secondaryContainer.withOpacity(0.92),
+                        color: AppTheme.secondaryContainer.withValues(
+                          alpha: 0.92,
+                        ),
                         fontSize: 11,
                         letterSpacing: 1.8,
                         fontWeight: FontWeight.w800,
@@ -374,7 +387,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceVariant.withOpacity(0.72),
+                        color: colorScheme.surfaceContainerHighest.withValues(
+                          alpha: 0.72,
+                        ),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Wrap(
@@ -427,8 +442,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
                                   colors: [
-                                    Colors.black.withOpacity(0.16),
-                                    Colors.black.withOpacity(0.70),
+                                    Colors.black.withValues(alpha: 0.16),
+                                    Colors.black.withValues(alpha: 0.70),
                                   ],
                                 ),
                               ),
@@ -470,8 +485,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHigh.withOpacity(
-                          0.80,
+                        color: colorScheme.surfaceContainerHigh.withValues(
+                          alpha: 0.80,
                         ),
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -518,8 +533,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                                 width: 32,
                                 height: 32,
                                 decoration: BoxDecoration(
-                                  color: AppTheme.primaryContainer.withOpacity(
-                                    0.14,
+                                  color: AppTheme.primaryContainer.withValues(
+                                    alpha: 0.14,
                                   ),
                                   borderRadius: BorderRadius.circular(999),
                                 ),
@@ -621,12 +636,12 @@ class _HeroImage extends StatelessWidget {
         ? Image.file(
             File(frameAssets.first),
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           )
         : Image.asset(
             frameAssets.first,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           );
   }
 }
@@ -650,7 +665,7 @@ class _WorkoutStatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh.withOpacity(0.92),
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -786,7 +801,7 @@ class _ExerciseFrameLoopState extends State<_ExerciseFrameLoop> {
               key: ValueKey<String>(widget.frameAssets[_frameIndex]),
               fit: BoxFit.contain,
               gaplessPlayback: true,
-              errorBuilder: (_, __, ___) =>
+              errorBuilder: (_, _, _) =>
                   const _ExercisePreviewFallbackContent(),
             )
           : Image.asset(
@@ -794,7 +809,7 @@ class _ExerciseFrameLoopState extends State<_ExerciseFrameLoop> {
               key: ValueKey<String>(widget.frameAssets[_frameIndex]),
               fit: BoxFit.contain,
               gaplessPlayback: true,
-              errorBuilder: (_, __, ___) =>
+              errorBuilder: (_, _, _) =>
                   const _ExercisePreviewFallbackContent(),
             ),
     );
@@ -814,8 +829,8 @@ class _ExercisePreviewFallbackContent extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            colorScheme.surfaceContainerHighest.withOpacity(0.65),
-            colorScheme.surfaceContainerLow.withOpacity(0.9),
+            colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+            colorScheme.surfaceContainerLow.withValues(alpha: 0.9),
           ],
         ),
       ),

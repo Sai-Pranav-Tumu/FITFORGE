@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../theme/app_theme.dart';
@@ -35,8 +36,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _workoutLocation;
   String? _availableEquipment;
   int? _sessionDurationMinutes;
-  String? _targetMuscleFocus;
-  String? _jointSensitivity;
+  Set<String> _targetMuscleFocuses = <String>{
+    UserModel.defaultTargetMuscleFocus,
+  };
+  Set<String> _jointSensitivities = <String>{UserModel.defaultJointSensitivity};
 
   static const int _totalQuestions = 15;
 
@@ -110,8 +113,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         workoutLocation: _workoutLocation ?? 'Home',
         availableEquipment: _availableEquipment ?? 'Bodyweight',
         sessionDurationMinutes: _sessionDurationMinutes ?? 30,
-        targetMuscleFocus: _targetMuscleFocus ?? 'Full Body',
-        jointSensitivity: _jointSensitivity ?? 'None',
+        targetMuscleFocuses: _targetMuscleFocuses.toList(growable: false),
+        jointSensitivities: _jointSensitivities.toList(growable: false),
       );
 
       if (!mounted) return;
@@ -397,12 +400,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             int.tryParse(value.split(' ').first) ?? 30,
                       ),
                     ),
-                    _buildChoiceQuestion(
+                    _buildMultiChoiceQuestion(
                       context,
-                      title: 'Which area do you want to emphasize most?',
+                      title: 'Which areas do you want to emphasize most?',
                       subtitle:
-                          'This gives your weekly plan a visible personal focus without ignoring balance.',
-                      selectedValue: _targetMuscleFocus,
+                          'Select one or more so your weekly plan can emphasize multiple body areas at the same time.',
+                      selectedValues: _targetMuscleFocuses,
                       options: const [
                         _ChoiceOption('Full Body', '🧍'),
                         _ChoiceOption('Upper Body', '💪'),
@@ -410,24 +413,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption('Core', '⚙'),
                         _ChoiceOption('Back & Posture', '🧠'),
                       ],
-                      onSelected: (value) =>
-                          setState(() => _targetMuscleFocus = value),
+                      onToggled: (value) => setState(() {
+                        _targetMuscleFocuses = _togglePreferenceSelection(
+                          _targetMuscleFocuses,
+                          value,
+                          resetOption: UserModel.defaultTargetMuscleFocus,
+                        );
+                      }),
                     ),
-                    _buildChoiceQuestion(
+                    _buildMultiChoiceQuestion(
                       context,
                       title:
                           'Any joints or areas we should be extra careful with?',
                       subtitle:
-                          'We use this to reduce risky movements and add more friendly alternatives.',
-                      selectedValue: _jointSensitivity,
+                          'Select every area that needs extra care so the engine can filter and rebalance workouts more accurately.',
+                      selectedValues: _jointSensitivities,
                       options: const [
                         _ChoiceOption('None', '✅'),
                         _ChoiceOption('Knees', '🦵'),
                         _ChoiceOption('Lower Back', '🩻'),
                         _ChoiceOption('Shoulders', '🫳'),
                       ],
-                      onSelected: (value) =>
-                          setState(() => _jointSensitivity = value),
+                      onToggled: (value) => setState(() {
+                        _jointSensitivities = _togglePreferenceSelection(
+                          _jointSensitivities,
+                          value,
+                          resetOption: UserModel.defaultJointSensitivity,
+                        );
+                      }),
                     ),
                     _buildWorkoutDaysQuestion(context),
                   ],
@@ -878,6 +891,171 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         },
       ),
     );
+  }
+
+  Widget _buildMultiChoiceQuestion(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required Set<String> selectedValues,
+    required List<_ChoiceOption> options,
+    required ValueChanged<String> onToggled,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final summary = selectedValues.join(' · ');
+
+    return _buildQuestionScaffold(
+      context: context,
+      title: title,
+      subtitle: subtitle,
+      canContinue: selectedValues.isNotEmpty,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Selected',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  summary,
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView.separated(
+              itemCount: options.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                final option = options[index];
+                final isSelected = selectedValues.contains(option.title);
+
+                return GestureDetector(
+                  onTap: () => onToggled(option.title),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.primaryContainer.withValues(alpha: 0.06)
+                          : colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border(
+                        left: BorderSide(
+                          color: isSelected
+                              ? AppTheme.primaryContainer
+                              : Colors.transparent,
+                          width: 4,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          option.emoji,
+                          style: const TextStyle(fontSize: 28),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                option.title,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                              if (option.subtitle != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  option.subtitle!,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppTheme.primaryContainer
+                                  : colorScheme.outline,
+                              width: 2,
+                            ),
+                            color: isSelected
+                                ? AppTheme.primaryContainer
+                                : Colors.transparent,
+                          ),
+                          child: isSelected
+                              ? const Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: Colors.white,
+                                )
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Set<String> _togglePreferenceSelection(
+    Set<String> current,
+    String value, {
+    required String resetOption,
+  }) {
+    if (value == resetOption) {
+      return <String>{resetOption};
+    }
+
+    final next = Set<String>.from(current)..remove(resetOption);
+    if (!next.add(value)) {
+      next.remove(value);
+    }
+
+    if (next.isEmpty) {
+      next.add(resetOption);
+    }
+
+    return next;
   }
 }
 

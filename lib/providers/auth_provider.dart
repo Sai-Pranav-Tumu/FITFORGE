@@ -83,5 +83,9 @@ class AuthProvider extends ChangeNotifier {
     } catch (error) {
       debugPrint('Local account cleanup failed: $error');
     }
+
+    _user = null;
+    _isLoading = false;
+    notifyListeners();
   }
 }

@@ -7,6 +7,7 @@ import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/nutrition_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/workout_provider.dart';
 import '../../services/nutrition_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/auth_error_card.dart';
@@ -32,7 +33,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       extendBodyBehindAppBar: false,
       appBar: const TopAppBar(title: 'Profile Settings'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.only(top: 16, bottom: 120),
+        padding: const EdgeInsets.only(top: 16, bottom: 28),
         child: Column(
           children: [
             Center(
@@ -281,12 +282,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         runSpacing: 8,
                         children: [
                           _smallChip(user?.availableEquipment ?? 'Bodyweight'),
-                          _smallChip(user?.targetMuscleFocus ?? 'Full Body'),
-                          _smallChip(
-                            (user?.jointSensitivity ?? 'None') == 'None'
-                                ? 'No joint limits'
-                                : '${user?.jointSensitivity} care',
-                          ),
+                          ..._focusAreaLabels(
+                            user,
+                          ).map((label) => _smallChip(label)),
+                          ..._jointCareLabels(
+                            user,
+                          ).map((label) => _smallChip(label)),
                         ],
                       ),
                     ),
@@ -602,10 +603,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 12),
         Text(
           'Deleting your account permanently removes your FitForge profile and clears your local meal history, diet plan, and hydration data from this device.',
-          style: TextStyle(
-            color: colorScheme.onSurfaceVariant,
-            height: 1.45,
-          ),
+          style: TextStyle(color: colorScheme.onSurfaceVariant, height: 1.45),
         ),
       ],
     );
@@ -691,10 +689,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _showDeleteAccountDialog(BuildContext context) async {
     final authProvider = context.read<AuthProvider>();
+    final userProvider = context.read<UserProvider>();
     final needsPassword = authProvider.requiresPasswordForAccountDeletion;
     final passwordController = TextEditingController();
 
-    await showDialog<void>(
+    final deletedAccount = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         final colorScheme = Theme.of(dialogContext).colorScheme;
@@ -705,9 +704,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             Future<void> submitDelete() async {
+              final navigator = Navigator.of(dialogContext);
+              final route = ModalRoute.of(dialogContext);
+              var shouldResetDeleting = true;
+
               if (needsPassword && passwordController.text.isEmpty) {
                 setDialogState(() {
-                  errorText = 'Enter your current password to delete your account.';
+                  errorText =
+                      'Enter your current password to delete your account.';
                 });
                 return;
               }
@@ -723,8 +727,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? passwordController.text
                       : null,
                 );
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
+                shouldResetDeleting = false;
+                if (navigator.mounted && (route?.isCurrent ?? false)) {
+                  navigator.pop(true);
                 }
               } catch (error) {
                 if (dialogContext.mounted) {
@@ -736,7 +741,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   });
                 }
               } finally {
-                if (dialogContext.mounted) {
+                if (shouldResetDeleting && dialogContext.mounted) {
                   setDialogState(() => deleting = false);
                 }
               }
@@ -801,10 +806,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 14),
                       Text(
                         errorText,
-                        style: TextStyle(
-                          color: colorScheme.error,
-                          height: 1.4,
-                        ),
+                        style: TextStyle(color: colorScheme.error, height: 1.4),
                       ),
                     ],
                   ],
@@ -842,6 +844,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     passwordController.dispose();
+
+    if (deletedAccount == true) {
+      userProvider.clearProfile();
+    }
   }
 
   Widget _smallChip(String label) {
@@ -860,6 +866,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  List<String> _focusAreaLabels(UserModel? user) {
+    if (user == null) {
+      return const <String>[UserModel.defaultTargetMuscleFocus];
+    }
+    return user.visibleFocusAreas;
+  }
+
+  List<String> _jointCareLabels(UserModel? user) {
+    if (user == null || user.selectedJointCareAreas.isEmpty) {
+      return const <String>['No joint limits'];
+    }
+    return user.selectedJointCareAreas
+        .map((area) => '$area care')
+        .toList(growable: false);
+  }
+
+  Set<String> _togglePreferenceSelection(
+    Set<String> current,
+    String value, {
+    required String resetOption,
+  }) {
+    if (value == resetOption) {
+      return <String>{resetOption};
+    }
+
+    final next = Set<String>.from(current)..remove(resetOption);
+    if (!next.add(value)) {
+      next.remove(value);
+    }
+
+    if (next.isEmpty) {
+      next.add(resetOption);
+    }
+
+    return next;
   }
 
   String userUnitsLabel(BuildContext context) {
@@ -1091,8 +1134,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     var workoutLocation = user.workoutLocation;
     var availableEquipment = user.availableEquipment;
     var sessionDurationMinutes = user.sessionDurationMinutes;
-    var targetMuscleFocus = user.targetMuscleFocus;
-    var jointSensitivity = user.jointSensitivity;
+    var targetMuscleFocuses = user.targetMuscleFocuses.toSet();
+    var jointSensitivities = user.jointSensitivities.toSet();
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1196,6 +1239,126 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             vertical: 10,
                           ),
                           onSelected: (_) => onSelected(option),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            Widget multiChoiceGroup(
+              String title,
+              String subtitle,
+              IconData icon,
+              Color accent,
+              List<String> options,
+              Set<String> selectedValues,
+              ValueChanged<String> onToggled,
+            ) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(icon, color: accent, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        'Selected: ${selectedValues.join(' · ')}',
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: options.map((option) {
+                        final isSelected = selectedValues.contains(option);
+                        return FilterChip(
+                          label: Text(option),
+                          selected: isSelected,
+                          showCheckmark: false,
+                          avatar: isSelected
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: accent,
+                                )
+                              : null,
+                          labelStyle: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? cs.onSurface
+                                : cs.onSurfaceVariant,
+                          ),
+                          side: BorderSide(
+                            color: isSelected
+                                ? accent.withValues(alpha: 0.24)
+                                : cs.outlineVariant.withValues(alpha: 0.2),
+                          ),
+                          backgroundColor: cs.surfaceContainerHighest,
+                          selectedColor: accent.withValues(alpha: 0.12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 10,
+                          ),
+                          onSelected: (_) => onToggled(option),
                         );
                       }).toList(),
                     ),
@@ -1334,48 +1497,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        choiceGroup(
+                        multiChoiceGroup(
                           'Focus Area',
-                          'Adds a clear emphasis without losing balance.',
+                          'Pick one or more body areas to emphasize together.',
                           Icons.center_focus_strong_rounded,
                           AppTheme.tertiary,
-                          const [
-                            'Full Body',
-                            'Upper Body',
-                            'Lower Body',
-                            'Core',
-                            'Back & Posture',
-                          ],
-                          targetMuscleFocus,
-                          (value) =>
-                              setModalState(() => targetMuscleFocus = value),
+                          UserModel.targetMuscleFocusOptions,
+                          targetMuscleFocuses,
+                          (value) => setModalState(() {
+                            targetMuscleFocuses = _togglePreferenceSelection(
+                              targetMuscleFocuses,
+                              value,
+                              resetOption: UserModel.defaultTargetMuscleFocus,
+                            );
+                          }),
                         ),
                         const SizedBox(height: 14),
-                        choiceGroup(
+                        multiChoiceGroup(
                           'Joint Care',
-                          'Steers the plan around sensitive areas when needed.',
+                          'Select every area that needs extra care.',
                           Icons.accessibility_new_rounded,
                           AppTheme.secondaryContainer,
-                          const ['None', 'Knees', 'Lower Back', 'Shoulders'],
-                          jointSensitivity,
-                          (value) =>
-                              setModalState(() => jointSensitivity = value),
+                          UserModel.jointSensitivityOptions,
+                          jointSensitivities,
+                          (value) => setModalState(() {
+                            jointSensitivities = _togglePreferenceSelection(
+                              jointSensitivities,
+                              value,
+                              resetOption: UserModel.defaultJointSensitivity,
+                            );
+                          }),
                         ),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
                             onPressed: () async {
-                              await context.read<UserProvider>().updateProfile(
-                                user.copyWith(
-                                  trainingLevel: trainingLevel,
-                                  workoutLocation: workoutLocation,
-                                  availableEquipment: availableEquipment,
-                                  sessionDurationMinutes:
-                                      sessionDurationMinutes,
-                                  targetMuscleFocus: targetMuscleFocus,
-                                  jointSensitivity: jointSensitivity,
+                              final userProvider = context.read<UserProvider>();
+                              final workoutProvider = context
+                                  .read<WorkoutProvider>();
+                              final updatedProfile = user.copyWith(
+                                trainingLevel: trainingLevel,
+                                workoutLocation: workoutLocation,
+                                availableEquipment: availableEquipment,
+                                sessionDurationMinutes: sessionDurationMinutes,
+                                targetMuscleFocuses: targetMuscleFocuses.toList(
+                                  growable: false,
                                 ),
+                                jointSensitivities: jointSensitivities.toList(
+                                  growable: false,
+                                ),
+                              );
+                              await userProvider.updateProfile(updatedProfile);
+                              await workoutProvider.refresh(
+                                profile: updatedProfile,
                               );
                               if (sheetContext.mounted) {
                                 Navigator.of(sheetContext).pop();

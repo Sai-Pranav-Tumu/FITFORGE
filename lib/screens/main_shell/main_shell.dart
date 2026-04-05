@@ -28,53 +28,51 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
+  void _selectTab(int index) {
+    if (index == _currentIndex) {
+      return;
+    }
+
+    setState(() {
+      if (_currentIndex == 1 && index != 1) {
+        _caloriesTabEpoch++;
+      }
+      _currentIndex = index;
+    });
+
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tabs = <Widget>[
-      const WorkoutScreen(),
+      WorkoutScreen(onOpenProfile: () => _selectTab(2)),
       CaloriesScreen(key: ValueKey<int>(_caloriesTabEpoch)),
       const ProfileScreen(),
     ];
 
     return Scaffold(
-      body: Stack(
-        children: [
-          PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() {
-                if (_currentIndex == 1 && index != 1) {
-                  _caloriesTabEpoch++;
-                }
-                _currentIndex = index;
-              });
-            },
-            children: tabs,
-          ),
-          
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: BottomNavBar(
-              currentIndex: _currentIndex,
-              onTap: (index) {
-                if (index == _currentIndex) return;
-                setState(() {
-                  if (_currentIndex == 1 && index != 1) {
-                    _caloriesTabEpoch++;
-                  }
-                  _currentIndex = index;
-                });
-                _pageController.animateToPage(
-                  index,
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                );
-              },
-            ),
-          ),
-        ],
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() {
+            if (_currentIndex == 1 && index != 1) {
+              _caloriesTabEpoch++;
+            }
+            _currentIndex = index;
+          });
+        },
+        children: tabs,
+      ),
+      bottomNavigationBar: BottomNavBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          _selectTab(index);
+        },
       ),
     );
   }

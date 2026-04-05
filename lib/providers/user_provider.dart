@@ -97,6 +97,8 @@ class UserProvider extends ChangeNotifier {
     int sessionDurationMinutes = 30,
     String targetMuscleFocus = 'Full Body',
     String jointSensitivity = 'None',
+    List<String>? targetMuscleFocuses,
+    List<String>? jointSensitivities,
   }) async {
     final existingProfile =
         _userProfile ?? await ensureProfileForUser(user, fallbackName: name);
@@ -117,6 +119,8 @@ class UserProvider extends ChangeNotifier {
       sessionDurationMinutes: sessionDurationMinutes,
       targetMuscleFocus: targetMuscleFocus,
       jointSensitivity: jointSensitivity,
+      targetMuscleFocuses: targetMuscleFocuses,
+      jointSensitivities: jointSensitivities,
       onboardingComplete: true,
     );
 

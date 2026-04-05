@@ -112,7 +112,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     final progress = (day.totalCalories / plan.tdee.targetCalories).clamp(0.0, 1.0);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

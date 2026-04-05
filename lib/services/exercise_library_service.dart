@@ -32,7 +32,10 @@ class ExerciseLibraryService extends ChangeNotifier
   static const String _versionKey = 'exercise_library_version';
   static const String _downloadConsentKey = 'exercise_library_download_consent';
   static const String _datasetFileName = 'exercises.json';
-  static const int _defaultEstimatedImageBytes = 64 * 1024;
+  // Measured from the current free-exercise-db image set:
+  // 1,746 images totaling 98,671,281 bytes (~94.1 MB).
+  static const int _defaultImageLibraryImageCount = 1746;
+  static const int _defaultImageLibraryTotalBytes = 98671281;
 
   Future<void>? _initFuture;
   bool _initialized = false;
@@ -256,6 +259,7 @@ class ExerciseLibraryService extends ChangeNotifier
       await _downloadAllImages(
         exercises: preparedExercises,
         imageBaseUrl: manifestUri.resolve(manifest.imageBaseUrl).toString(),
+        expectedTotalBytes: _resolveImageLibraryTotalBytes(manifest),
       );
 
       _updateDownloadState(
@@ -309,7 +313,8 @@ class ExerciseLibraryService extends ChangeNotifier
           version: 'direct-dataset-fallback',
           generatedAt: DateTime.now().toUtc(),
           totalExercises: decoded.length,
-          totalImages: 0,
+          totalImages: _defaultImageLibraryImageCount,
+          totalImageBytes: _defaultImageLibraryTotalBytes,
           datasetUrl: manifestUrl,
           imageBaseUrl: _defaultImageBaseUrl,
         );
@@ -335,7 +340,8 @@ class ExerciseLibraryService extends ChangeNotifier
       version: 'github-fallback',
       generatedAt: DateTime.now().toUtc(),
       totalExercises: 0,
-      totalImages: 0,
+      totalImages: _defaultImageLibraryImageCount,
+      totalImageBytes: _defaultImageLibraryTotalBytes,
       datasetUrl: _defaultDatasetUrl,
       imageBaseUrl: _defaultImageBaseUrl,
     );
@@ -407,6 +413,7 @@ class ExerciseLibraryService extends ChangeNotifier
   Future<void> _downloadAllImages({
     required List<Map<String, dynamic>> exercises,
     required String imageBaseUrl,
+    required int expectedTotalBytes,
   }) async {
     final imageDir = await _localImagesDir();
     final tasks = <_ImageDownloadTask>[];
@@ -443,23 +450,17 @@ class ExerciseLibraryService extends ChangeNotifier
 
     final totalTasks = tasks.length;
     var processedTasks = 0;
-    var measuredTasks = 0;
     var downloadedBytes = 0;
     const concurrency = 6;
     var next = 0;
 
     void updateImageDownloadProgress() {
-      final estimatedTotalBytes = _estimateImageLibraryTotalBytes(
-        totalTasks: totalTasks,
-        measuredTasks: measuredTasks,
-        downloadedBytes: downloadedBytes,
-      );
       _updateDownloadState(
         phase: 'images',
         progress: 0.22 + 0.66 * (processedTasks / totalTasks),
         message: _libraryDownloadProgressMessage(
           downloadedBytes: downloadedBytes,
-          totalBytes: estimatedTotalBytes,
+          totalBytes: expectedTotalBytes,
         ),
       );
     }
@@ -477,7 +478,6 @@ class ExerciseLibraryService extends ChangeNotifier
           final existingLength = await task.file.length();
           if (existingLength > 0) {
             processedTasks++;
-            measuredTasks++;
             downloadedBytes += existingLength;
             updateImageDownloadProgress();
             continue;
@@ -485,7 +485,6 @@ class ExerciseLibraryService extends ChangeNotifier
         }
         try {
           final bytesDownloaded = await _downloadFile(task.uri, task.file);
-          measuredTasks++;
           downloadedBytes += bytesDownloaded;
         } catch (error) {
           failedImages.add(task.uri.toString());
@@ -528,23 +527,18 @@ class ExerciseLibraryService extends ChangeNotifier
     });
   }
 
-  int _estimateImageLibraryTotalBytes({
-    required int totalTasks,
-    required int measuredTasks,
-    required int downloadedBytes,
-  }) {
-    if (totalTasks <= 0) {
-      return 0;
+  int _resolveImageLibraryTotalBytes(ExerciseLibraryManifest manifest) {
+    if (manifest.totalImageBytes > 0) {
+      return manifest.totalImageBytes;
     }
 
-    final averageImageBytes = measuredTasks == 0
-        ? _defaultEstimatedImageBytes
-        : (downloadedBytes / measuredTasks).round();
-    final estimatedTotalBytes =
-        downloadedBytes + averageImageBytes * (totalTasks - measuredTasks);
-    return estimatedTotalBytes < downloadedBytes
-        ? downloadedBytes
-        : estimatedTotalBytes;
+    if (manifest.totalImages > 0) {
+      final averageImageBytes =
+          _defaultImageLibraryTotalBytes / _defaultImageLibraryImageCount;
+      return (manifest.totalImages * averageImageBytes).round();
+    }
+
+    return _defaultImageLibraryTotalBytes;
   }
 
   String _libraryDownloadProgressMessage({

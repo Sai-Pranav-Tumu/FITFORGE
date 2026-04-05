@@ -4,6 +4,7 @@ class ExerciseLibraryManifest {
     required this.generatedAt,
     required this.totalExercises,
     required this.totalImages,
+    this.totalImageBytes = 0,
     required this.datasetUrl,
     required this.imageBaseUrl,
   });
@@ -12,6 +13,7 @@ class ExerciseLibraryManifest {
   final DateTime generatedAt;
   final int totalExercises;
   final int totalImages;
+  final int totalImageBytes;
   final String datasetUrl;
   final String imageBaseUrl;
 
@@ -23,6 +25,7 @@ class ExerciseLibraryManifest {
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       totalExercises: (json['totalExercises'] as num?)?.toInt() ?? 0,
       totalImages: (json['totalImages'] as num?)?.toInt() ?? 0,
+      totalImageBytes: (json['totalImageBytes'] as num?)?.toInt() ?? 0,
       datasetUrl: json['datasetUrl'] as String? ?? '',
       imageBaseUrl: json['imageBaseUrl'] as String? ?? '',
     );
@@ -34,6 +37,7 @@ class ExerciseLibraryManifest {
       'generatedAt': generatedAt.toUtc().toIso8601String(),
       'totalExercises': totalExercises,
       'totalImages': totalImages,
+      'totalImageBytes': totalImageBytes,
       'datasetUrl': datasetUrl,
       'imageBaseUrl': imageBaseUrl,
     };

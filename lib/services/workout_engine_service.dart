@@ -39,7 +39,7 @@ class WorkoutEngineService {
           if (!_levelCompatible(profile.trainingLevel, exercise.level)) {
             return false;
           }
-          if (!_jointCompatible(profile.jointSensitivity, exercise)) {
+          if (!_jointCompatible(profile.jointSensitivities, exercise)) {
             return false;
           }
           return true;
@@ -146,7 +146,7 @@ class WorkoutEngineService {
         profile: profile,
         title: _focusSessionTitle(profile),
         description:
-            'This session leans into your focus area without losing overall balance.',
+            'This session leans into your selected focus areas without losing overall balance.',
         calories: 310,
         exercises: _pickSet(
           profile: profile,
@@ -318,7 +318,7 @@ class WorkoutEngineService {
       _trainingDay(
         profile: profile,
         title: _focusSessionTitle(profile),
-        description: 'An emphasis day built around your chosen muscle focus.',
+        description: 'An emphasis day built around your chosen focus areas.',
         calories: 300,
         exercises: _pickSet(
           profile: profile,
@@ -864,10 +864,10 @@ class WorkoutEngineService {
   }
 
   static int _coreSlotCount(UserModel profile, int exerciseCount) {
-    if (profile.targetMuscleFocus == 'Core') {
+    if (profile.hasTargetMuscleFocus('Core')) {
       return exerciseCount >= 8 ? 2 : 1;
     }
-    if (profile.targetMuscleFocus == 'Back & Posture' ||
+    if (profile.hasTargetMuscleFocus('Back & Posture') ||
         profile.fitnessGoal == 'Lose Weight') {
       return 2;
     }
@@ -893,7 +893,7 @@ class WorkoutEngineService {
     return profile.occupation == 'Desk Job' ||
         profile.sittingHours == '6-8 Hours' ||
         profile.sittingHours == '8+ Hours' ||
-        profile.jointSensitivity != 'None';
+        profile.selectedJointCareAreas.isNotEmpty;
   }
 
   static bool _isPrimaryStrengthExercise(
@@ -1053,7 +1053,7 @@ class WorkoutEngineService {
         allText.contains('max')) {
       score -= 3.0;
     }
-    if (!_jointCompatible(profile.jointSensitivity, exercise)) {
+    if (!_jointCompatible(profile.jointSensitivities, exercise)) {
       score -= 5.0;
     }
 
@@ -1377,25 +1377,36 @@ class WorkoutEngineService {
   }
 
   static bool _jointCompatible(
-    String jointSensitivity,
+    Iterable<String> jointSensitivities,
     ExerciseDefinition exercise,
   ) {
-    final sensitivity = _normalize(jointSensitivity);
+    final sensitivities = jointSensitivities
+        .map(_normalize)
+        .where((value) => value.isNotEmpty && value != 'none')
+        .toSet();
+    if (sensitivities.isEmpty) {
+      return true;
+    }
+
     final haystack = '${exercise.name} ${exercise.instructions.join(' ')}'
         .toLowerCase();
 
-    if (sensitivity == 'knees') {
-      return !haystack.contains('jump') && !haystack.contains('sprint');
+    if (sensitivities.contains('knees') &&
+        (haystack.contains('jump') || haystack.contains('sprint'))) {
+      return false;
     }
-    if (sensitivity == 'lower back') {
-      return !haystack.contains('good morning') &&
-          !haystack.contains('maximal') &&
-          !haystack.contains('heavy');
+    if (sensitivities.contains('lower back') &&
+        (haystack.contains('good morning') ||
+            haystack.contains('maximal') ||
+            haystack.contains('heavy'))) {
+      return false;
     }
-    if (sensitivity == 'shoulders') {
-      return !haystack.contains('upright row') &&
-          !haystack.contains('behind the neck');
+    if (sensitivities.contains('shoulders') &&
+        (haystack.contains('upright row') ||
+            haystack.contains('behind the neck'))) {
+      return false;
     }
+
     return true;
   }
 
@@ -1403,26 +1414,62 @@ class WorkoutEngineService {
     UserModel profile, {
     bool strongFocus = false,
   }) {
-    switch (profile.targetMuscleFocus) {
-      case 'Upper Body':
-        return strongFocus
-            ? ['pectorals', 'latissimus dorsi', 'deltoids', 'triceps', 'biceps']
-            : ['pectorals', 'latissimus dorsi', 'deltoids'];
-      case 'Lower Body':
-        return strongFocus
-            ? ['quadriceps', 'gluteus maximus', 'hamstrings', 'calves']
-            : ['quadriceps', 'gluteus maximus', 'hamstrings'];
-      case 'Core':
-        return strongFocus
-            ? ['abdominals', 'obliques', 'lower back']
-            : ['abdominals', 'obliques'];
-      case 'Back & Posture':
-        return strongFocus
-            ? ['latissimus dorsi', 'trapezius', 'rear deltoids', 'lower back']
-            : ['latissimus dorsi', 'trapezius'];
-      default:
-        return ['pectorals', 'latissimus dorsi', 'quadriceps', 'abdominals'];
+    final focusAreas = profile.selectedFocusAreas;
+    if (focusAreas.isEmpty) {
+      return ['pectorals', 'latissimus dorsi', 'quadriceps', 'abdominals'];
     }
+
+    final focusMuscles = <String>{};
+    for (final focusArea in focusAreas) {
+      switch (focusArea) {
+        case 'Upper Body':
+          focusMuscles.addAll(
+            strongFocus
+                ? const [
+                    'pectorals',
+                    'latissimus dorsi',
+                    'deltoids',
+                    'triceps',
+                    'biceps',
+                  ]
+                : const ['pectorals', 'latissimus dorsi', 'deltoids'],
+          );
+          break;
+        case 'Lower Body':
+          focusMuscles.addAll(
+            strongFocus
+                ? const [
+                    'quadriceps',
+                    'gluteus maximus',
+                    'hamstrings',
+                    'calves',
+                  ]
+                : const ['quadriceps', 'gluteus maximus', 'hamstrings'],
+          );
+          break;
+        case 'Core':
+          focusMuscles.addAll(
+            strongFocus
+                ? const ['abdominals', 'obliques', 'lower back']
+                : const ['abdominals', 'obliques'],
+          );
+          break;
+        case 'Back & Posture':
+          focusMuscles.addAll(
+            strongFocus
+                ? const [
+                    'latissimus dorsi',
+                    'trapezius',
+                    'rear deltoids',
+                    'lower back',
+                  ]
+                : const ['latissimus dorsi', 'trapezius'],
+          );
+          break;
+      }
+    }
+
+    return focusMuscles.toList(growable: false);
   }
 
   static List<String> _goalMuscles(UserModel profile) {
@@ -1567,13 +1614,7 @@ class WorkoutEngineService {
       _ => 'consistent full-body training',
     };
 
-    final focusLine = switch (profile.targetMuscleFocus) {
-      'Upper Body' => 'with extra upper-body emphasis',
-      'Lower Body' => 'with extra lower-body emphasis',
-      'Core' => 'with extra trunk and posture work',
-      'Back & Posture' => 'with posture-supportive pulling and mobility work',
-      _ => 'with balanced weekly recovery',
-    };
+    final focusLine = _focusLine(profile);
 
     return '${_capitalize(goalLine)} $focusLine';
   }
@@ -1615,17 +1656,56 @@ class WorkoutEngineService {
   }
 
   static String _focusSessionTitle(UserModel profile) {
-    switch (profile.targetMuscleFocus) {
-      case 'Upper Body':
-        return 'Upper Body Focus';
-      case 'Lower Body':
-        return 'Lower Body Focus';
-      case 'Core':
-        return 'Core Stability Focus';
-      case 'Back & Posture':
-        return 'Back + Posture Focus';
-      default:
-        return 'Full Body Focus';
+    final focusAreas = profile.visibleFocusAreas;
+    if (focusAreas.length == 1) {
+      switch (focusAreas.first) {
+        case 'Upper Body':
+          return 'Upper Body Focus';
+        case 'Lower Body':
+          return 'Lower Body Focus';
+        case 'Core':
+          return 'Core Stability Focus';
+        case 'Back & Posture':
+          return 'Back + Posture Focus';
+        default:
+          return 'Full Body Focus';
+      }
     }
+
+    return '${focusAreas.join(' + ')} Focus';
+  }
+
+  static String _focusLine(UserModel profile) {
+    final focusAreas = profile.selectedFocusAreas;
+    if (focusAreas.isEmpty) {
+      return 'with balanced weekly recovery';
+    }
+
+    final descriptors = focusAreas
+        .map(
+          (focusArea) => switch (focusArea) {
+            'Upper Body' => 'upper-body',
+            'Lower Body' => 'lower-body',
+            'Core' => 'trunk and posture',
+            'Back & Posture' => 'posture-supportive back',
+            _ => _normalize(focusArea),
+          },
+        )
+        .toList(growable: false);
+
+    return 'with extra ${_joinWithAnd(descriptors)} emphasis';
+  }
+
+  static String _joinWithAnd(List<String> values) {
+    if (values.isEmpty) {
+      return '';
+    }
+    if (values.length == 1) {
+      return values.first;
+    }
+    if (values.length == 2) {
+      return '${values[0]} and ${values[1]}';
+    }
+    return '${values.sublist(0, values.length - 1).join(', ')}, and ${values.last}';
   }
 }

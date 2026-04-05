@@ -12,7 +12,12 @@ import '../../theme/app_theme.dart';
 import '../../widgets/top_app_bar.dart';
 
 class WorkoutScreen extends StatelessWidget {
-  const WorkoutScreen({super.key});
+  final VoidCallback? onOpenProfile;
+
+  const WorkoutScreen({
+    super.key,
+    this.onOpenProfile,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +57,7 @@ class WorkoutScreen extends StatelessWidget {
           downloadProgress: workoutProvider.downloadProgress,
           downloadPhase: workoutProvider.downloadPhase,
           downloadPhaseMessage: workoutProvider.downloadPhaseMessage,
+          onOpenProfile: onOpenProfile,
         );
       },
     );
@@ -66,6 +72,7 @@ class _WorkoutContent extends StatefulWidget {
   final double downloadProgress;
   final String downloadPhase;
   final String downloadPhaseMessage;
+  final VoidCallback? onOpenProfile;
 
   const _WorkoutContent({
     required this.profile,
@@ -75,6 +82,7 @@ class _WorkoutContent extends StatefulWidget {
     required this.downloadProgress,
     required this.downloadPhase,
     required this.downloadPhaseMessage,
+    this.onOpenProfile,
   });
 
   @override
@@ -92,6 +100,115 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     _selectedDate = DateTime(now.year, now.month, now.day);
   }
 
+  void _setCalendarProgress(double value) {
+    final nextValue = value.clamp(0.0, 1.0).toDouble();
+    if (nextValue == _calendarProgress) {
+      return;
+    }
+
+    setState(() {
+      _calendarProgress = nextValue;
+    });
+  }
+
+  void _toggleCalendar() {
+    _setCalendarProgress(_calendarProgress > 0.5 ? 0.0 : 1.0);
+  }
+
+  void _handleCalendarVerticalDragUpdate(
+    DragUpdateDetails details,
+    double dragRange,
+  ) {
+    final nextValue = (_calendarProgress + (details.delta.dy / dragRange))
+        .clamp(0.0, 1.0)
+        .toDouble();
+    if (nextValue == _calendarProgress) {
+      return;
+    }
+
+    setState(() {
+      _calendarProgress = nextValue;
+    });
+  }
+
+  void _handleCalendarVerticalDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldExpand = velocity.abs() > 220
+        ? velocity > 0
+        : _calendarProgress > 0.32;
+    _setCalendarProgress(shouldExpand ? 1.0 : 0.0);
+  }
+
+  void _handleCalendarHorizontalDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 220) {
+      return;
+    }
+
+    if (_calendarProgress < 0.35) {
+      _shiftSelectedDateByDays(velocity < 0 ? 7 : -7);
+      return;
+    }
+
+    _shiftSelectedMonth(velocity < 0 ? 1 : -1);
+  }
+
+  void _shiftSelectedDateByDays(int days) {
+    setState(() {
+      _selectedDate = _selectedDate.add(Duration(days: days));
+    });
+  }
+
+  void _shiftSelectedMonth(int offset) {
+    setState(() {
+      _selectedDate = _monthShiftedDate(_selectedDate, offset);
+    });
+  }
+
+  DateTime _monthShiftedDate(DateTime date, int offset) {
+    final shiftedMonth = DateTime(date.year, date.month + offset, 1);
+    final lastDayOfMonth = DateTime(
+      shiftedMonth.year,
+      shiftedMonth.month + 1,
+      0,
+    ).day;
+
+    return DateTime(
+      shiftedMonth.year,
+      shiftedMonth.month,
+      date.day.clamp(1, lastDayOfMonth),
+    );
+  }
+
+  Future<void> _refreshWorkout() async {
+    final userProvider = context.read<UserProvider>();
+    final workoutProvider = context.read<WorkoutProvider>();
+    final currentProfile = userProvider.userProfile;
+    if (currentProfile == null) {
+      return;
+    }
+
+    await userProvider.fetchUserProfile(currentProfile.id);
+    await workoutProvider.refresh(
+      profile: userProvider.userProfile ?? currentProfile,
+    );
+  }
+
+  Future<void> _openWorkoutSession(
+    WorkoutDayPlan plan, {
+    int initialExerciseIndex = 0,
+  }) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => WorkoutSessionScreen(
+          plan: plan,
+          initialExerciseIndex: initialExerciseIndex,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -102,6 +219,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 380;
+    final contentBottomPadding = isSmallScreen ? 24.0 : 28.0;
 
     final weekHeight = isSmallScreen ? 90.0 : 100.0;
     final monthRowHeight = isSmallScreen ? 54.0 : 58.0;
@@ -117,295 +235,281 @@ class _WorkoutContentState extends State<_WorkoutContent> {
         weekHeight + ((monthHeight - weekHeight) * _calendarProgress);
 
     return Scaffold(
-      appBar: TopAppBar(title: greetingPrefix, subtitle: profile.name),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, isSmallScreen ? 112 : 120),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Weekly Focus',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        recommendation.weeklyFocus,
-                        style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: isSmallScreen ? 12 : 13,
-                          height: 1.25,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  _calendarProgress >= 0.5 ? 'Month' : 'Week',
-                  style: TextStyle(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              decoration: _cardDecoration(context),
-              child: Column(
+      appBar: TopAppBar(
+        title: greetingPrefix,
+        subtitle: profile.name,
+        onAvatarTap: widget.onOpenProfile,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshWorkout,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, contentBottomPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                    child: _MonthHeader(
-                      monthLabel: _monthLabel(_selectedDate),
-                      onPrevious: () {
-                        setState(() {
-                          final previousMonth = DateTime(
-                            _selectedDate.year,
-                            _selectedDate.month - 1,
-                            1,
-                          );
-                          _selectedDate = DateTime(
-                            previousMonth.year,
-                            previousMonth.month,
-                            (_selectedDate.day).clamp(
-                              1,
-                              DateTime(
-                                previousMonth.year,
-                                previousMonth.month + 1,
-                                0,
-                              ).day,
-                            ),
-                          );
-                        });
-                      },
-                      onNext: () {
-                        setState(() {
-                          final nextMonth = DateTime(
-                            _selectedDate.year,
-                            _selectedDate.month + 1,
-                            1,
-                          );
-                          _selectedDate = DateTime(
-                            nextMonth.year,
-                            nextMonth.month,
-                            (_selectedDate.day).clamp(
-                              1,
-                              DateTime(
-                                nextMonth.year,
-                                nextMonth.month + 1,
-                                0,
-                              ).day,
-                            ),
-                          );
-                        });
-                      },
-                    ),
-                  ),
-                  ClipRect(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      heightFactor: (visibleCalendarHeight / monthHeight).clamp(
-                        0.0,
-                        1.0,
-                      ),
-                      child: SizedBox(
-                        height: monthHeight,
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              top: 0,
-                              height: weekHeight,
-                              child: IgnorePointer(
-                                ignoring: _calendarProgress > 0.55,
-                                child: Opacity(
-                                  opacity: (1 - (_calendarProgress * 1.4))
-                                      .clamp(0.0, 1.0),
-                                  child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      10,
-                                      2,
-                                      10,
-                                      0,
-                                    ),
-                                    child: _buildWeekStrip(context),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                ignoring: _calendarProgress < 0.12,
-                                child: Opacity(
-                                  opacity: ((_calendarProgress - 0.08) / 0.92)
-                                      .clamp(0.0, 1.0),
-                                  child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      10,
-                                      2,
-                                      10,
-                                      0,
-                                    ),
-                                    child: _buildMonthGrid(
-                                      context,
-                                      rowHeight: monthRowHeight,
-                                      rowSpacing: monthRowSpacing,
-                                      showWeekLabels: true,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Weekly Focus',
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onVerticalDragUpdate: (details) {
-                      final delta =
-                          details.delta.dy / (monthHeight - weekHeight);
-                      setState(() {
-                        _calendarProgress = (_calendarProgress + delta).clamp(
-                          0.0,
-                          1.0,
-                        );
-                      });
-                    },
-                    onVerticalDragEnd: (_) {
-                      setState(() {
-                        _calendarProgress = _calendarProgress > 0.45
-                            ? 1.0
-                            : 0.0;
-                      });
-                    },
-                    onTap: () {
-                      setState(() {
-                        _calendarProgress = _calendarProgress > 0.5 ? 0.0 : 1.0;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2, bottom: 10),
-                      child: Center(
-                        child: Container(
-                          width: isSmallScreen ? 52 : 56,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: colorScheme.outlineVariant.withValues(
-                              alpha: 0.7,
-                            ),
-                            borderRadius: BorderRadius.circular(999),
+                        const SizedBox(height: 4),
+                        Text(
+                          recommendation.weeklyFocus,
+                          style: TextStyle(
+                            color: colorScheme.onSurfaceVariant,
+                            fontSize: isSmallScreen ? 12 : 13,
+                            height: 1.25,
                           ),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _calendarProgress >= 0.5 ? 'Month' : 'Week',
+                    style: TextStyle(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 18),
-            if (widget.syncingLibrary) ...[
-              _DownloadProgressPanel(
-                progress: widget.downloadProgress,
-                phase: widget.downloadPhase,
-                message: widget.downloadPhaseMessage,
-                compact: true,
-              ),
-              const SizedBox(height: 18),
-            ] else if (widget.usingStarterPack) ...[
+              const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.all(18),
                 decoration: _cardDecoration(context),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
                   children: [
-                    Icon(
-                      Icons.cloud_download_outlined,
-                      color: colorScheme.primary,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: _MonthHeader(
+                        monthLabel: _monthLabel(_selectedDate),
+                        onPrevious: () => _shiftSelectedMonth(-1),
+                        onNext: () => _shiftSelectedMonth(1),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'A local exercise dataset is currently active. The full library will appear automatically after sync completes.',
-                        style: TextStyle(color: colorScheme.onSurfaceVariant),
+                    ClipRect(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        heightFactor: (visibleCalendarHeight / monthHeight)
+                            .clamp(0.0, 1.0),
+                        child: SizedBox(
+                          height: monthHeight,
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                top: 0,
+                                height: weekHeight,
+                                child: IgnorePointer(
+                                  ignoring: _calendarProgress > 0.55,
+                                  child: Opacity(
+                                    opacity: (1 - (_calendarProgress * 1.4))
+                                        .clamp(0.0, 1.0),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.translucent,
+                                      onHorizontalDragEnd:
+                                          _handleCalendarHorizontalDragEnd,
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          10,
+                                          2,
+                                          10,
+                                          0,
+                                        ),
+                                        child: _buildWeekStrip(context),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  ignoring: _calendarProgress < 0.12,
+                                  child: Opacity(
+                                    opacity: ((_calendarProgress - 0.08) / 0.92)
+                                        .clamp(0.0, 1.0),
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.translucent,
+                                      onHorizontalDragEnd:
+                                          _handleCalendarHorizontalDragEnd,
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          10,
+                                          2,
+                                          10,
+                                          0,
+                                        ),
+                                        child: _buildMonthGrid(
+                                          context,
+                                          rowHeight: monthRowHeight,
+                                          rowSpacing: monthRowSpacing,
+                                          showWeekLabels: true,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onVerticalDragUpdate: (details) {
+                        _handleCalendarVerticalDragUpdate(
+                          details,
+                          monthHeight - weekHeight,
+                        );
+                      },
+                      onVerticalDragEnd: _handleCalendarVerticalDragEnd,
+                      onTap: _toggleCalendar,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 12),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _calendarProgress > 0.5
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                size: 18,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                width: isSmallScreen ? 58 : 64,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.outlineVariant.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 18),
-            ],
-            _buildPersonalizationOverview(context, profile),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: _cardDecoration(context),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              if (widget.syncingLibrary) ...[
+                _DownloadProgressPanel(
+                  progress: widget.downloadProgress,
+                  phase: widget.downloadPhase,
+                  message: widget.downloadPhaseMessage,
+                  compact: true,
+                ),
+                const SizedBox(height: 18),
+              ] else if (widget.usingStarterPack) ...[
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: _cardDecoration(context),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.cloud_download_outlined,
+                        color: colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'A local exercise dataset is currently active. The full library will appear automatically after sync completes.',
+                          style: TextStyle(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+              ],
+              _buildPersonalizationOverview(context, profile),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: _cardDecoration(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your Plan Logic',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _planReason(context, 'Goal', _goalReason(profile)),
+                    const SizedBox(height: 8),
+                    _planReason(
+                      context,
+                      'Lifestyle',
+                      _lifestyleReason(profile),
+                    ),
+                    const SizedBox(height: 8),
+                    _planReason(
+                      context,
+                      'Schedule',
+                      'Your ${profile.workoutDays}-day availability determines the split and recovery balance.',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+              _buildWorkoutCard(context, todaysPlan),
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Your Plan Logic',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    'Exercise Routine',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 10),
-                  _planReason(context, 'Goal', _goalReason(profile)),
-                  const SizedBox(height: 8),
-                  _planReason(context, 'Lifestyle', _lifestyleReason(profile)),
-                  const SizedBox(height: 8),
-                  _planReason(
-                    context,
-                    'Schedule',
-                    'Your ${profile.workoutDays}-day availability determines the split and recovery balance.',
+                  Text(
+                    '${todaysPlan.exercises.length} Exercises',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 28),
-            _buildWorkoutCard(context, todaysPlan),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Exercise Routine',
-                  style: Theme.of(context).textTheme.titleLarge,
+              const SizedBox(height: 8),
+              Text(
+                'Goal: ${profile.fitnessGoal}  ·  Occupation: ${profile.occupation}',
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 13,
                 ),
-                Text(
-                  '${todaysPlan.exercises.length} Exercises',
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12,
+              ),
+              const SizedBox(height: 16),
+              ...todaysPlan.exercises.asMap().entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildExerciseRow(
+                    context,
+                    entry.value,
+                    index: entry.key,
+                    plan: todaysPlan,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Goal: ${profile.fitnessGoal}  ·  Occupation: ${profile.occupation}',
-              style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
-                fontSize: 13,
               ),
-            ),
-            const SizedBox(height: 16),
-            ...todaysPlan.exercises.map(
-              (exercise) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildExerciseRow(context, exercise),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -646,13 +750,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => WorkoutSessionScreen(plan: plan),
-                        ),
-                      );
-                    },
+                    onPressed: () => _openWorkoutSession(plan),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryContainer,
                       padding: const EdgeInsets.symmetric(
@@ -768,6 +866,9 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     UserModel profile,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final focusAreas = profile.visibleFocusAreas;
+    final jointCareAreas = profile.selectedJointCareAreas;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: _cardDecoration(context, radius: 18),
@@ -806,23 +907,32 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 Icons.timer_outlined,
                 '${profile.sessionDurationMinutes} min sessions',
               ),
-              _buildMetaChip(
-                context,
-                Icons.track_changes_rounded,
-                profile.targetMuscleFocus,
+              ...focusAreas.map(
+                (focusArea) => _buildMetaChip(
+                  context,
+                  Icons.track_changes_rounded,
+                  focusArea,
+                ),
               ),
               _buildMetaChip(
                 context,
                 Icons.handyman_rounded,
                 profile.availableEquipment,
               ),
-              _buildMetaChip(
-                context,
-                Icons.health_and_safety_outlined,
-                profile.jointSensitivity == 'None'
-                    ? 'No joint limits'
-                    : '${profile.jointSensitivity} care',
-              ),
+              if (jointCareAreas.isEmpty)
+                _buildMetaChip(
+                  context,
+                  Icons.health_and_safety_outlined,
+                  'No joint limits',
+                )
+              else
+                ...jointCareAreas.map(
+                  (jointCareArea) => _buildMetaChip(
+                    context,
+                    Icons.health_and_safety_outlined,
+                    '$jointCareArea care',
+                  ),
+                ),
             ],
           ),
         ],
@@ -871,94 +981,156 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     );
   }
 
-  Widget _buildExerciseRow(BuildContext context, WorkoutExercise exercise) {
+  Widget _buildExerciseRow(
+    BuildContext context,
+    WorkoutExercise exercise, {
+    required int index,
+    required WorkoutDayPlan plan,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: _cardDecoration(context),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: exercise.animationFrames.isNotEmpty
-                ? _RoutineExerciseThumbnail(
-                    exercise: exercise,
-                    fallbackIcon: _exerciseIcon(exercise.movementPattern),
-                  )
-                : Icon(
-                    _exerciseIcon(exercise.movementPattern),
-                    color: colorScheme.primary,
-                  ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  exercise.name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _openWorkoutSession(plan, initialExerciseIndex: index),
+        child: Ink(
+          padding: const EdgeInsets.all(12),
+          decoration: _cardDecoration(context),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  exercise.prescription,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  exercise.cue,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                clipBehavior: Clip.antiAlias,
+                child: exercise.animationFrames.isNotEmpty
+                    ? _RoutineExerciseThumbnail(
+                        exercise: exercise,
+                        fallbackIcon: _exerciseIcon(exercise.movementPattern),
+                      )
+                    : Icon(
+                        _exerciseIcon(exercise.movementPattern),
+                        color: colorScheme.primary,
+                      ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ...exercise.primaryMuscles
-                        .take(2)
-                        .map(
-                          (muscle) => _miniChip(
-                            context,
-                            muscle,
-                            AppTheme.secondaryContainer,
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryContainer.withValues(
+                              alpha: 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'EX ${index + 1}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                              color: AppTheme.primaryContainer,
+                            ),
                           ),
                         ),
-                    _miniChip(
-                      context,
-                      exercise.equipment,
-                      AppTheme.primaryContainer,
+                        const Spacer(),
+                        Text(
+                          'Jump In',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.play_circle_fill_rounded,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
+                      ],
                     ),
-                    if (exercise.targetDurationSeconds != null)
-                      _miniChip(
-                        context,
-                        '${exercise.targetDurationSeconds}s',
-                        AppTheme.tertiary,
+                    const SizedBox(height: 8),
+                    Text(
+                      exercise.name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      exercise.prescription,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      exercise.cue,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        ...exercise.primaryMuscles
+                            .take(2)
+                            .map(
+                              (muscle) => _miniChip(
+                                context,
+                                muscle,
+                                AppTheme.secondaryContainer,
+                              ),
+                            ),
+                        _miniChip(
+                          context,
+                          exercise.equipment,
+                          AppTheme.primaryContainer,
+                        ),
+                        if (exercise.targetDurationSeconds != null)
+                          _miniChip(
+                            context,
+                            '${exercise.targetDurationSeconds}s',
+                            AppTheme.tertiary,
+                          ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Padding(
+                padding: const EdgeInsets.only(top: 34),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
-          Icon(Icons.more_vert, color: colorScheme.onSurfaceVariant),
-        ],
+        ),
       ),
     );
   }

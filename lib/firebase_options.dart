@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyA1S5ZjDXbM0Zw0Cz1kTjVDQ3KLpJorr10',
-    appId: '1:864808171743:android:24964b45e6a08b79e4916a',
+    appId: '1:864808171743:android:89a57dcc798c0a45e4916a',
     messagingSenderId: '864808171743',
     projectId: 'fitforge-96786',
     storageBucket: 'fitforge-96786.firebasestorage.app',
