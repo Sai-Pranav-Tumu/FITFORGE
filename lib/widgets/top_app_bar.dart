@@ -143,7 +143,7 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Hydration reminders are personalized around your last water log.',
+                      'Hydration reminders are personalized around your last water log and may arrive a little later to preserve battery life.',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),

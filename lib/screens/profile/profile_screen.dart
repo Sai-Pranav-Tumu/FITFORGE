@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/user_model.dart';
@@ -8,6 +9,7 @@ import '../../providers/nutrition_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../services/nutrition_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/auth_error_card.dart';
 import '../../widgets/dark_mode_toggle.dart';
 import '../../widgets/top_app_bar.dart';
 
@@ -566,6 +568,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 24),
               _buildSettingsRow(
                 context,
+                Icons.privacy_tip_outlined,
+                'Privacy Policy',
+                onTap: () => context.push('/privacy-policy'),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+              ),
+              const SizedBox(height: 24),
+              _buildSettingsRow(
+                context,
                 Icons.logout,
                 'Logout',
                 onTap: () async {
@@ -573,7 +583,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
                 trailing: const Icon(Icons.chevron_right, size: 20),
               ),
+              const SizedBox(height: 24),
+              _buildSettingsRow(
+                context,
+                Icons.delete_forever_rounded,
+                'Delete Account',
+                onTap: () => _showDeleteAccountDialog(context),
+                trailing: Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: colorScheme.error,
+                ),
+                foregroundColor: colorScheme.error,
+              ),
             ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Deleting your account permanently removes your FitForge profile and clears your local meal history, diet plan, and hydration data from this device.',
+          style: TextStyle(
+            color: colorScheme.onSurfaceVariant,
+            height: 1.45,
           ),
         ),
       ],
@@ -628,8 +659,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String label, {
     VoidCallback? onTap,
     required Widget trailing,
+    Color? foregroundColor,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final effectiveColor = foregroundColor ?? colorScheme.onSurfaceVariant;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -637,12 +671,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
-            Icon(icon, color: colorScheme.onSurfaceVariant, size: 20),
+            Icon(icon, color: effectiveColor, size: 20),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: foregroundColor,
+                ),
               ),
             ),
             trailing,
@@ -650,6 +687,161 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _showDeleteAccountDialog(BuildContext context) async {
+    final authProvider = context.read<AuthProvider>();
+    final needsPassword = authProvider.requiresPasswordForAccountDeletion;
+    final passwordController = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final colorScheme = Theme.of(dialogContext).colorScheme;
+        var errorText = '';
+        var deleting = false;
+        var obscurePassword = true;
+
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> submitDelete() async {
+              if (needsPassword && passwordController.text.isEmpty) {
+                setDialogState(() {
+                  errorText = 'Enter your current password to delete your account.';
+                });
+                return;
+              }
+
+              setDialogState(() {
+                deleting = true;
+                errorText = '';
+              });
+
+              try {
+                await authProvider.deleteAccount(
+                  currentPassword: needsPassword
+                      ? passwordController.text
+                      : null,
+                );
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    errorText = formatAuthError(
+                      error,
+                      flow: AuthFlow.deleteAccount,
+                    );
+                  });
+                }
+              } finally {
+                if (dialogContext.mounted) {
+                  setDialogState(() => deleting = false);
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Delete Account'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'This permanently deletes your FitForge account, synced profile, meal history on this device, saved diet plan, and hydration reminder data.',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'This action cannot be undone.',
+                      style: TextStyle(
+                        color: colorScheme.error,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (needsPassword) ...[
+                      const SizedBox(height: 18),
+                      TextField(
+                        controller: passwordController,
+                        obscureText: obscurePassword,
+                        enabled: !deleting,
+                        decoration: InputDecoration(
+                          labelText: 'Current password',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: deleting
+                                ? null
+                                : () => setDialogState(
+                                    () => obscurePassword = !obscurePassword,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 18),
+                      Text(
+                        'We may ask you to confirm with Google before deletion finishes.',
+                        style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                    if (errorText.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Text(
+                        errorText,
+                        style: TextStyle(
+                          color: colorScheme.error,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: deleting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: deleting ? null : submitDelete,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colorScheme.error,
+                    foregroundColor: colorScheme.onError,
+                  ),
+                  child: deleting
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colorScheme.onError,
+                          ),
+                        )
+                      : const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    passwordController.dispose();
   }
 
   Widget _smallChip(String label) {

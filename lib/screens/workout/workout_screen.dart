@@ -1487,9 +1487,11 @@ class _DownloadProgressPanel extends StatelessWidget {
   }
 
   static String _phaseTitle(String phase) {
+    if (phase == 'dataset' || phase == 'images') {
+      return 'Downloading exercise libraries';
+    }
+
     return switch (phase) {
-      'dataset' => 'Downloading exercise data',
-      'images' => 'Downloading exercise images',
       'extracting' => 'Extracting and organizing files',
       'setup' => 'Setting up your workout library',
       'complete' => 'Exercise library ready',
@@ -1499,9 +1501,11 @@ class _DownloadProgressPanel extends StatelessWidget {
   }
 
   static IconData _phaseIcon(String phase) {
+    if (phase == 'dataset' || phase == 'images') {
+      return Icons.download_for_offline_outlined;
+    }
+
     return switch (phase) {
-      'dataset' => Icons.download_rounded,
-      'images' => Icons.photo_library_outlined,
       'extracting' => Icons.unarchive_outlined,
       'setup' => Icons.folder_copy_outlined,
       'complete' => Icons.check_circle_outline_rounded,

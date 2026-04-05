@@ -10,6 +10,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/diet_plan/diet_plan_screen.dart';
 import 'screens/generating/generating_screen.dart';
+import 'screens/legal/privacy_policy_screen.dart';
 import 'screens/main_shell/main_shell.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/splash/splash_screen.dart';
@@ -47,12 +48,13 @@ class _FitForgeAppState extends State<FitForgeApp> {
         final isAuthPage =
             state.matchedLocation == '/login' ||
             state.matchedLocation == '/register';
+        final isLegalPage = state.matchedLocation == '/privacy-policy';
         final isSplash = state.matchedLocation == '/splash';
         final isOnboarding = state.matchedLocation == '/onboarding';
         final needsOnboarding =
             isAuth && (userProvider.userProfile?.onboardingComplete != true);
 
-        if (!isAuth && !isAuthPage && !isSplash) {
+        if (!isAuth && !isAuthPage && !isSplash && !isLegalPage) {
           return '/login';
         }
 
@@ -98,6 +100,10 @@ class _FitForgeAppState extends State<FitForgeApp> {
         GoRoute(
           path: '/diet-plan',
           builder: (context, state) => const DietPlanScreen(),
+        ),
+        GoRoute(
+          path: '/privacy-policy',
+          builder: (context, state) => const PrivacyPolicyScreen(),
         ),
         GoRoute(
           path: '/home',

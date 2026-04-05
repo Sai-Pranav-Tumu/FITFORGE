@@ -49,7 +49,6 @@ class NotificationService {
     if (notificationsEnabled != true) {
       await android?.requestNotificationsPermission();
     }
-    await android?.requestExactAlarmsPermission();
     return await android?.areNotificationsEnabled() ?? true;
   }
 
@@ -76,7 +75,7 @@ class NotificationService {
           priority: Priority.high,
         ),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
   }
 

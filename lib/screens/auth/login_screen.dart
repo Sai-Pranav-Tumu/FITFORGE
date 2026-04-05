@@ -23,18 +23,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submitLogin() async {
     FocusManager.instance.primaryFocus?.unfocus();
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    final validationMessage = validateEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    if (validationMessage != null) {
+      setState(() => _errorMessage = validationMessage);
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
-      await context.read<AuthProvider>().signIn(
-        _emailCtrl.text.trim(),
-        _passwordCtrl.text,
-      );
+      await context.read<AuthProvider>().signIn(email, password);
       // go_router redirect handles navigation
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = formatAuthError(e));
+      if (mounted) {
+        setState(
+          () => _errorMessage = formatAuthError(e, flow: AuthFlow.signIn),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -354,6 +367,22 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 16),
+                            Center(
+                              child: GestureDetector(
+                                onTap: () => context.push('/privacy-policy'),
+                                child: Text(
+                                  'Privacy Policy',
+                                  style: TextStyle(
+                                    color: colorScheme.primary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -387,6 +416,11 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextField(
         controller: controller,
         obscureText: obscureText,
+        onChanged: (_) {
+          if (_errorMessage != null) {
+            setState(() => _errorMessage = null);
+          }
+        },
         style: TextStyle(color: colorScheme.onSurface),
         decoration: InputDecoration(
           hintText: hintText,

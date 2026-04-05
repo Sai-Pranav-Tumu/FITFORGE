@@ -23,21 +23,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submitRegister() async {
     FocusManager.instance.primaryFocus?.unfocus();
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    final validationMessage = validateEmailAndPassword(
+      email: email,
+      password: password,
+      enforceMinimumPasswordLength: true,
+    );
+
+    if (validationMessage != null) {
+      setState(() => _errorMessage = validationMessage);
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
-      final creds = await context.read<AuthProvider>().signUp(
-        _emailCtrl.text.trim(),
-        _passwordCtrl.text,
-      );
+      final creds = await context.read<AuthProvider>().signUp(email, password);
       if (creds?.user != null) {
         // New email user → onboarding
         if (mounted) context.go('/onboarding');
       }
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = formatAuthError(e));
+      if (mounted) {
+        setState(
+          () => _errorMessage = formatAuthError(e, flow: AuthFlow.signUp),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -357,6 +371,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 16),
+                            Center(
+                              child: GestureDetector(
+                                onTap: () => context.push('/privacy-policy'),
+                                child: Text(
+                                  'Privacy Policy',
+                                  style: TextStyle(
+                                    color: colorScheme.primary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -390,6 +420,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: TextField(
         controller: controller,
         obscureText: obscureText,
+        onChanged: (_) {
+          if (_errorMessage != null) {
+            setState(() => _errorMessage = null);
+          }
+        },
         style: TextStyle(color: colorScheme.onSurface),
         decoration: InputDecoration(
           hintText: hintText,

@@ -270,6 +270,15 @@ class NutritionService {
     );
   }
 
+  Future<void> deleteUserData(String userId) async {
+    final db = await _openDb();
+    await db.delete(
+      'meal_entries',
+      where: 'user_id = ?',
+      whereArgs: <Object>[userId],
+    );
+  }
+
   Future<DailyNutritionSummary> getDailySummary({
     required String userId,
     required DateTime date,

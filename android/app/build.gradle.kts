@@ -1,4 +1,6 @@
 
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -7,8 +9,16 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+
+if (hasReleaseKeystore) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
 android {
-    namespace = "com.example.fitforge"
+    namespace = "com.fitforge.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,17 +33,38 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.fitforge"
+        applicationId = "com.fitforge.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                // Keeps local release builds working until an upload keystore is configured.
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
@@ -47,9 +78,6 @@ dependencies {
 
     // Import the Firebase BoM — manages all Firebase library versions
     implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
-
-    // Firebase Analytics
-    implementation("com.google.firebase:firebase-analytics")
 
     // Google Sign-In (required for google_sign_in Flutter plugin)
     implementation("com.google.android.gms:play-services-auth:21.3.0")

@@ -3,18 +3,84 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-String formatAuthError(Object error) {
+enum AuthFlow { signIn, signUp, social, deleteAccount }
+
+String? validateEmailAndPassword({
+  required String email,
+  required String password,
+  bool validateEmailFormat = true,
+  bool enforceMinimumPasswordLength = false,
+}) {
+  final trimmedEmail = email.trim();
+  final trimmedPassword = password.trim();
+
+  if (trimmedEmail.isEmpty && trimmedPassword.isEmpty) {
+    return 'Enter your email address and password.';
+  }
+  if (trimmedEmail.isEmpty) {
+    return 'Email address is required.';
+  }
+  if (trimmedPassword.isEmpty) {
+    return 'Password is required.';
+  }
+  if (validateEmailFormat && !_isValidEmail(trimmedEmail)) {
+    return 'Enter a valid email address.';
+  }
+  if (enforceMinimumPasswordLength && password.length < 6) {
+    return 'Password must be at least 6 characters long.';
+  }
+  return null;
+}
+
+String formatAuthError(
+  Object error, {
+  AuthFlow flow = AuthFlow.signIn,
+}) {
   if (error is FirebaseAuthException) {
     switch (error.code.toLowerCase()) {
+      case 'missing-email':
+        return 'Email address is required.';
+      case 'missing-password':
+        if (flow == AuthFlow.deleteAccount) {
+          return 'Enter your current password to delete your account.';
+        }
+        return 'Password is required.';
+      case 'invalid-email':
+        return 'Enter a valid email address.';
       case 'invalid-credential':
       case 'wrong-password':
+        if (flow == AuthFlow.deleteAccount) {
+          return 'The current password you entered is incorrect.';
+        }
+        return 'Email address or password does not match our records.';
       case 'user-not-found':
-      case 'invalid-email':
-        return 'That email and password combination does not look right. Double-check it and try again.';
+        if (flow == AuthFlow.deleteAccount) {
+          return 'You need to sign in again before deleting your account.';
+        }
+        return 'Email address or password does not match our records.';
+      case 'user-disabled':
+        return 'This account has been disabled. Please contact support or try another account.';
+      case 'user-mismatch':
+        return flow == AuthFlow.deleteAccount
+            ? 'Use the same Google account that you used to sign in to FitForge.'
+            : 'Please use the same Google account you use for FitForge.';
       case 'email-already-in-use':
         return 'An account already exists for this email. Try logging in instead.';
       case 'weak-password':
-        return 'Choose a stronger password with at least 6 characters.';
+        return flow == AuthFlow.signUp
+            ? 'Password must be at least 6 characters long.'
+            : 'Choose a stronger password with at least 6 characters.';
+      case 'reauth-cancelled':
+        return 'Account deletion was cancelled before we could verify your identity.';
+      case 'requires-recent-login':
+      case 'credential-too-old-login-again':
+        return 'For your security, sign in again and then retry deleting your account.';
+      case 'no-current-user':
+        return 'You need to sign in again before deleting your account.';
+      case 'operation-not-allowed':
+        return flow == AuthFlow.signUp
+            ? 'Email sign-up is not available right now. Please try again later.'
+            : 'This sign-in method is not available right now. Please try again later.';
       case 'network-request-failed':
         return 'FitForge could not reach the server. Check your connection and try again.';
       case 'too-many-requests':
@@ -34,6 +100,12 @@ String _cleanErrorMessage(String message) {
   var cleaned = message.trim().replaceFirst('Exception: ', '');
   cleaned = cleaned.replaceFirst(RegExp(r'^\[[^\]]+\]\s*'), '');
   return cleaned.isEmpty ? 'Something went wrong. Please try again.' : cleaned;
+}
+
+bool _isValidEmail(String email) {
+  const emailPattern =
+      r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$";
+  return RegExp(emailPattern, caseSensitive: false).hasMatch(email);
 }
 
 class AuthErrorCard extends StatelessWidget {

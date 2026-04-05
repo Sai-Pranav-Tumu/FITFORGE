@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
+import 'auth_error_card.dart';
 
 /// A self-contained "Continue with Google" button.
 /// Drop it into any screen — it handles loading state, errors,
@@ -39,7 +40,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              e.toString().replaceFirst('Exception: ', ''),
+              formatAuthError(e, flow: AuthFlow.social),
               style: const TextStyle(color: Colors.white),
             ),
             backgroundColor: Colors.red.shade700,

@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/account_deletion_service.dart';
 import '../services/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -10,6 +12,8 @@ class AuthProvider extends ChangeNotifier {
 
   User? get user => _user;
   bool get isLoading => _isLoading;
+  bool get requiresPasswordForAccountDeletion =>
+      _authService.currentUserUsesPasswordSignIn;
 
   AuthProvider() {
     _authService.authStateChanges.listen((User? user) {
@@ -53,5 +57,31 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     await _authService.signOut();
+  }
+
+  Future<void> deleteAccount({String? currentPassword}) async {
+    final activeUser = _authService.currentUser;
+    if (activeUser == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Sign in again before deleting your account.',
+      );
+    }
+
+    await _authService.reauthenticateForAccountDeletion(
+      currentPassword: currentPassword,
+    );
+    await AccountDeletionService.instance.deleteRemoteDataForUser(
+      activeUser.uid,
+    );
+    await _authService.deleteCurrentUser();
+
+    try {
+      await AccountDeletionService.instance.deleteLocalDataForUser(
+        activeUser.uid,
+      );
+    } catch (error) {
+      debugPrint('Local account cleanup failed: $error');
+    }
   }
 }

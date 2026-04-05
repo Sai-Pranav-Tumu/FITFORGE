@@ -22,7 +22,11 @@ class DatabaseService {
     }
     return null;
   }
-  
+
+  Future<void> deleteUser(String uid) async {
+    await _db.collection('users').doc(uid).delete();
+  }
+
   // Example update user metric method
   Future<void> updateUserWeight(String uid, double newWeight) async {
     await _db.collection('users').doc(uid).update({'weight': newWeight});

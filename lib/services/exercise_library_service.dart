@@ -32,6 +32,7 @@ class ExerciseLibraryService extends ChangeNotifier
   static const String _versionKey = 'exercise_library_version';
   static const String _downloadConsentKey = 'exercise_library_download_consent';
   static const String _datasetFileName = 'exercises.json';
+  static const int _defaultEstimatedImageBytes = 64 * 1024;
 
   Future<void>? _initFuture;
   bool _initialized = false;
@@ -250,7 +251,7 @@ class ExerciseLibraryService extends ChangeNotifier
       _updateDownloadState(
         phase: 'images',
         progress: 0.22,
-        message: 'Downloading exercise images…',
+        message: 'Downloading exercise libraries…',
       );
       await _downloadAllImages(
         exercises: preparedExercises,
@@ -441,9 +442,29 @@ class ExerciseLibraryService extends ChangeNotifier
     }
 
     final totalTasks = tasks.length;
-    var downloadedTasks = 0;
+    var processedTasks = 0;
+    var measuredTasks = 0;
+    var downloadedBytes = 0;
     const concurrency = 6;
     var next = 0;
+
+    void updateImageDownloadProgress() {
+      final estimatedTotalBytes = _estimateImageLibraryTotalBytes(
+        totalTasks: totalTasks,
+        measuredTasks: measuredTasks,
+        downloadedBytes: downloadedBytes,
+      );
+      _updateDownloadState(
+        phase: 'images',
+        progress: 0.22 + 0.66 * (processedTasks / totalTasks),
+        message: _libraryDownloadProgressMessage(
+          downloadedBytes: downloadedBytes,
+          totalBytes: estimatedTotalBytes,
+        ),
+      );
+    }
+
+    updateImageDownloadProgress();
 
     Future<void> worker() async {
       while (true) {
@@ -452,29 +473,27 @@ class ExerciseLibraryService extends ChangeNotifier
           return;
         }
         final task = tasks[index];
-        if (await task.file.exists() && await task.file.length() > 0) {
-          downloadedTasks++;
-          _updateDownloadState(
-            phase: 'images',
-            progress: 0.22 + 0.66 * (downloadedTasks / totalTasks),
-            message:
-                'Downloading exercise images ($downloadedTasks/$totalTasks)…',
-          );
-          continue;
+        if (await task.file.exists()) {
+          final existingLength = await task.file.length();
+          if (existingLength > 0) {
+            processedTasks++;
+            measuredTasks++;
+            downloadedBytes += existingLength;
+            updateImageDownloadProgress();
+            continue;
+          }
         }
         try {
-          await _downloadFile(task.uri, task.file);
+          final bytesDownloaded = await _downloadFile(task.uri, task.file);
+          measuredTasks++;
+          downloadedBytes += bytesDownloaded;
         } catch (error) {
           failedImages.add(task.uri.toString());
           debugPrint('Exercise image download failed: ${task.uri} - $error');
+        } finally {
+          processedTasks++;
+          updateImageDownloadProgress();
         }
-        downloadedTasks++;
-        _updateDownloadState(
-          phase: 'images',
-          progress: 0.22 + 0.66 * (downloadedTasks / totalTasks),
-          message:
-              'Downloading exercise images ($downloadedTasks/$totalTasks)…',
-        );
       }
     }
 
@@ -509,9 +528,40 @@ class ExerciseLibraryService extends ChangeNotifier
     });
   }
 
-  Future<void> _downloadFile(Uri uri, File file) async {
+  int _estimateImageLibraryTotalBytes({
+    required int totalTasks,
+    required int measuredTasks,
+    required int downloadedBytes,
+  }) {
+    if (totalTasks <= 0) {
+      return 0;
+    }
+
+    final averageImageBytes = measuredTasks == 0
+        ? _defaultEstimatedImageBytes
+        : (downloadedBytes / measuredTasks).round();
+    final estimatedTotalBytes =
+        downloadedBytes + averageImageBytes * (totalTasks - measuredTasks);
+    return estimatedTotalBytes < downloadedBytes
+        ? downloadedBytes
+        : estimatedTotalBytes;
+  }
+
+  String _libraryDownloadProgressMessage({
+    required int downloadedBytes,
+    required int totalBytes,
+  }) {
+    return 'Downloading exercise libraries (${_formatMegabytes(downloadedBytes)}/${_formatMegabytes(totalBytes)} downloaded)…';
+  }
+
+  String _formatMegabytes(int bytes) {
+    final megabytes = bytes / (1024 * 1024);
+    return '${megabytes.toStringAsFixed(1)} MB';
+  }
+
+  Future<int> _downloadFile(Uri uri, File file) async {
     await file.parent.create(recursive: true);
-    await _runWithRetries<void>(() async {
+    return _runWithRetries<int>(() async {
       final client = HttpClient()
         ..connectionTimeout = const Duration(seconds: 30);
       final tempFile = File('${file.path}.part');
@@ -534,10 +584,12 @@ class ExerciseLibraryService extends ChangeNotifier
         } finally {
           await sink.close();
         }
+        final downloadedLength = await tempFile.length();
         if (await file.exists()) {
           await file.delete();
         }
         await tempFile.rename(file.path);
+        return downloadedLength;
       } catch (_) {
         if (await tempFile.exists()) {
           await tempFile.delete();

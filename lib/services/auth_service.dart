@@ -7,6 +7,11 @@ class AuthService {
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
+  bool get currentUserUsesPasswordSignIn =>
+      currentUser?.providerData.any(
+        (provider) => provider.providerId == 'password',
+      ) ??
+      false;
 
   // ── Email / Password ──────────────────────────────────────────────────────
 
@@ -53,6 +58,90 @@ class AuthService {
       return await _auth.signInWithCredential(credential);
     } catch (e) {
       rethrow;
+    }
+  }
+
+  Future<void> reauthenticateForAccountDeletion({
+    String? currentPassword,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Sign in again before deleting your account.',
+      );
+    }
+
+    final providerIds = user.providerData
+        .map((provider) => provider.providerId)
+        .toSet();
+
+    if (providerIds.contains('password')) {
+      final email = user.email?.trim();
+      if (email == null || email.isEmpty) {
+        throw FirebaseAuthException(
+          code: 'missing-email',
+          message: 'Email address is required to verify your account.',
+        );
+      }
+      if (currentPassword == null || currentPassword.isEmpty) {
+        throw FirebaseAuthException(
+          code: 'missing-password',
+          message: 'Enter your current password to delete your account.',
+        );
+      }
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: currentPassword,
+      );
+      await user.reauthenticateWithCredential(credential);
+      return;
+    }
+
+    if (providerIds.contains('google.com')) {
+      GoogleSignInAccount? googleUser = await _googleSignIn.signInSilently();
+      googleUser ??= await _googleSignIn.signIn();
+      if (googleUser == null) {
+        throw FirebaseAuthException(
+          code: 'reauth-cancelled',
+          message: 'Google reauthentication was cancelled.',
+        );
+      }
+
+      final email = user.email?.trim().toLowerCase();
+      if (email != null &&
+          email.isNotEmpty &&
+          googleUser.email.trim().toLowerCase() != email) {
+        throw FirebaseAuthException(
+          code: 'user-mismatch',
+          message: 'Please choose the same Google account you use for FitForge.',
+        );
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      await user.reauthenticateWithCredential(credential);
+    }
+  }
+
+  Future<void> deleteCurrentUser() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Sign in again before deleting your account.',
+      );
+    }
+
+    await user.delete();
+
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {
+      // Ignore disconnect failures for non-Google accounts.
     }
   }
 
