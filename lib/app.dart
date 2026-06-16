@@ -72,7 +72,10 @@ class _FitForgeAppState extends State<FitForgeApp> {
           return null;
         }
 
-        if (isAuth && (isAuthPage || isSplash)) {
+        // NOTE: the splash route is intentionally NOT redirected here. The
+        // SplashScreen decides when to leave (once auth + profile + the first
+        // workout plan are ready) so users never land on a still-loading home.
+        if (isAuth && isAuthPage) {
           return '/home';
         }
 

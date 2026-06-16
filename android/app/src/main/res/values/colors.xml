@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the Flutter splash background (AppTheme dark scaffold) so the
+         native launch window doesn't flash white before Flutter draws. -->
+    <color name="splash_bg">#FF0A0D13</color>
+</resources>

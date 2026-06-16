@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/user_model.dart' show workoutDateKey;
 import '../../models/workout_plan.dart';
+import '../../models/workout_log_models.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/workout_log_provider.dart';
 import '../../theme/app_theme.dart';
@@ -175,6 +176,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     await SystemSound.play(SystemSoundType.alert);
     if (!mounted) return;
 
+    // Auto-save the set that just finished (no-op for timed holds).
+    _autoLogCurrentSet();
+
     if (_hasMoreCyclesInExercise) {
       _beginRestBeforeNextCycle();
       return;
@@ -200,6 +204,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
       _advanceAfterRest();
       return;
     }
+
+    // Auto-save the set the user just finished with their dialled-in values.
+    _autoLogCurrentSet();
 
     if (_hasMoreCyclesInExercise) {
       _beginRestBeforeNextCycle();
@@ -397,29 +404,67 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     return rounded % 1 == 0 ? '${rounded.toInt()}kg' : '${rounded}kg';
   }
 
-  void _logCurrentSet(int reps, double weightKg) {
+  /// Capitalises the first letter of each word for display (dataset names are
+  /// lowercase, e.g. "dumbbell straight arm pullover").
+  String _titleCase(String input) {
+    return input
+        .split(RegExp(r'\s+'))
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word[0].toUpperCase()}${word.substring(1)}',
+        )
+        .join(' ');
+  }
+
+  /// Whether the set-logging panel applies to the current exercise.
+  bool get _isLoggableExercise =>
+      !_isResting &&
+      !widget.plan.isRestDay &&
+      _currentExercise.targetDurationSeconds == null;
+
+  int _effectiveReps() {
+    if (_logReps != null) return _logReps!;
+    final last = context.read<WorkoutLogProvider>().lastSessionFor(
+      _currentExercise.name,
+      todayKey: workoutDateKey(widget.sessionDate),
+    );
+    return _currentExercise.targetRepCount ??
+        (last.isNotEmpty ? last.first.reps : 10);
+  }
+
+  double _effectiveWeight() {
+    if (_logWeight != null) return _logWeight!;
+    final last = context.read<WorkoutLogProvider>().lastSessionFor(
+      _currentExercise.name,
+      todayKey: workoutDateKey(widget.sessionDate),
+    );
+    return last.isNotEmpty ? last.first.weightKg : 0.0;
+  }
+
+  bool _isCurrentSetLogged() {
+    final key = WorkoutSetLog.keyForName(_currentExercise.name);
+    final todayKey = workoutDateKey(widget.sessionDate);
+    return context.read<WorkoutLogProvider>().logs.any(
+      (l) =>
+          l.exerciseKey == key &&
+          l.dateKey == todayKey &&
+          l.setNumber == _exerciseCycle,
+    );
+  }
+
+  /// Logs the current set automatically (called when advancing) using whatever
+  /// reps/weight the user dialled in — so they never have to tap a separate
+  /// "Log" button. No-op for rest days, timed holds, or already-logged sets.
+  void _autoLogCurrentSet() {
+    if (!_isLoggableExercise || _isCurrentSetLogged()) return;
     context.read<WorkoutLogProvider>().logSet(
       exerciseName: _currentExercise.name,
       date: widget.sessionDate,
       setNumber: _exerciseCycle,
-      reps: reps,
-      weightKg: weightKg,
+      reps: _effectiveReps(),
+      weightKg: _effectiveWeight(),
     );
-    setState(() {
-      _logReps = reps;
-      _logWeight = weightKg;
-    });
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            'Logged ${_cycleLabel.toLowerCase()} $_exerciseCycle: '
-            '$reps reps @ ${_formatWeight(weightKg)}.',
-          ),
-          duration: const Duration(milliseconds: 1400),
-        ),
-      );
   }
 
   Widget _buildSetLogPanel(BuildContext context) {
@@ -480,12 +525,16 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               children: [
                 _StepButton(icon: Icons.remove, onTap: onMinus),
                 Expanded(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ),
@@ -562,7 +611,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               stepper(
                 icon: Icons.monitor_weight_outlined,
                 label: 'WEIGHT',
-                value: _formatWeight(defaultWeight),
+                value: defaultWeight <= 0 ? 'BW' : _formatWeight(defaultWeight),
                 onMinus: () => setState(
                   () => _logWeight = (defaultWeight - 2.5).clamp(0.0, 500.0),
                 ),
@@ -572,14 +621,45 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => _logCurrentSet(defaultReps, defaultWeight),
-              icon: const Icon(Icons.check_rounded, size: 18),
-              label: Text('Log ${_cycleLabel.toLowerCase()} $_exerciseCycle'),
-            ),
+          const SizedBox(height: 10),
+          Builder(
+            builder: (context) {
+              final isLoggedToday = logProvider.logs.any(
+                (l) =>
+                    l.exerciseKey == WorkoutSetLog.keyForName(exercise.name) &&
+                    l.dateKey == workoutDateKey(widget.sessionDate) &&
+                    l.setNumber == _exerciseCycle,
+              );
+              final saved = isLoggedToday
+                  ? 'Saved — $defaultReps reps @ ${defaultWeight <= 0 ? 'BW' : _formatWeight(defaultWeight)}'
+                  : 'Saved automatically when you tap Next';
+              return Row(
+                children: [
+                  Icon(
+                    isLoggedToday
+                        ? Icons.check_circle_rounded
+                        : Icons.bolt_rounded,
+                    size: 15,
+                    color: isLoggedToday
+                        ? Colors.green
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      saved,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: isLoggedToday
+                            ? Colors.green
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -678,10 +758,8 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         : '${_cycleLabel.toUpperCase()} $_exerciseCycle/$_totalCycles';
     final canAdvanceWithinExercise = !_isResting && _hasMoreCyclesInExercise;
     final nextButtonLabel = _isResting
-        ? 'Skip Rest'
-        : canAdvanceWithinExercise
-        ? 'Next $_cycleLabel'
-        : (isLastExercise ? 'Finish' : 'Next Exercise');
+        ? 'Skip'
+        : (!canAdvanceWithinExercise && isLastExercise ? 'Finish' : 'Next');
     final targetLabel = displayExercise.primaryMuscles.isNotEmpty
         ? displayExercise.primaryMuscles.first
         : 'Full Body';
@@ -691,8 +769,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final heroFrames = displayExercise.animationFrames;
     final hasHeroImage = heroFrames.isNotEmpty;
     final topLabel = _isResting ? 'RECOVERY WINDOW' : 'CURRENT EXERCISE';
-    final headline = _isResting ? 'Rest & Reset' : displayExercise.name;
-    final subHeadline = _isResting ? displayExercise.name : null;
+    final headline = _isResting
+        ? 'Rest & Reset'
+        : _titleCase(displayExercise.name);
+    final subHeadline = _isResting ? _titleCase(displayExercise.name) : null;
     final hintText = _focusHint(displayExercise);
     final guideTitle = _isResting ? 'UP NEXT GUIDE' : 'EXECUTION GUIDE';
     final restPreview = _isResting

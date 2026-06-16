@@ -212,6 +212,8 @@ class _PurchaseActions extends StatelessWidget {
             if (yearly != null) productButton(yearly),
             if (yearly != null && monthly != null) const SizedBox(height: 10),
             if (monthly != null) productButton(monthly, primary: yearly == null),
+            const SizedBox(height: 8),
+            const _PaymentMethodsNote(),
             TextButton(
               onPressed: () => billing.restore(),
               child: const Text('Restore purchase'),
@@ -233,6 +235,62 @@ class _PurchaseActions extends StatelessWidget {
               child: const Text('Unlock (testing)'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Communicates the available payment methods. On Android, the Google Play
+/// checkout sheet offers UPI, cards, net banking and wallets — selected by the
+/// user during purchase. (Play policy requires digital goods to use Play
+/// Billing, so a separate UPI/card gateway is not used.)
+class _PaymentMethodsNote extends StatelessWidget {
+  const _PaymentMethodsNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.lock_rounded,
+                size: 13,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Secure payment via Google Play',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'UPI · Cards · Net banking · Wallets',
+            style: TextStyle(
+              fontSize: 11,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
+            ),
+          ),
+          Text(
+            'Cancel anytime in Google Play subscriptions.',
+            style: TextStyle(
+              fontSize: 10.5,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+            ),
+          ),
         ],
       ),
     );

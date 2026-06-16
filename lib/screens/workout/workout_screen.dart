@@ -188,8 +188,11 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     }
 
     await userProvider.fetchUserProfile(currentProfile.id);
+    // Keep the current plan visible while recomputing so the dashboard doesn't
+    // flash/stutter during the pull-to-refresh.
     await workoutProvider.refresh(
       profile: userProvider.userProfile ?? currentProfile,
+      clearCurrent: false,
     );
   }
 

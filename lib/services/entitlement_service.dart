@@ -47,11 +47,23 @@ class EntitlementService extends ChangeNotifier {
   }
 
   /// Dev/testing fallback that grants entitlement without a purchase. The real
-  /// path is a verified store purchase via BillingService → [setPremium].
+  /// path is a server-verified store purchase via BillingService.
   Future<void> startPremium() => setPremium(true);
 
-  /// Grants/revokes premium. Called by BillingService after a verified purchase
-  /// (or restore). Persists locally and mirrors to Firestore (best-effort).
+  /// Updates the entitlement cache from a SERVER-VERIFIED result (the Cloud
+  /// Function already wrote the authoritative `isPremium` flag to Firestore, so
+  /// this only updates the local cache and notifies listeners).
+  Future<void> applyVerifiedEntitlement(bool premium) async {
+    _isPremium = premium;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsKey, premium);
+  }
+
+  /// Grants/revokes premium. Used by the dev fallback and as a best-effort path
+  /// when server verification is unavailable. The Firestore write is denied
+  /// under the locked-down rules (the Cloud Function owns `isPremium`), which is
+  /// expected and harmless — the local cache still reflects the grant.
   Future<void> setPremium(bool premium) => _grant(premium);
 
   Future<void> _grant(bool premium) async {
@@ -66,7 +78,7 @@ class EntitlementService extends ChangeNotifier {
           'isPremium': premium,
         }, SetOptions(merge: true));
       } catch (error) {
-        debugPrint('Entitlement persist failed: $error');
+        debugPrint('Entitlement persist failed (expected under locked rules): $error');
       }
     }
   }

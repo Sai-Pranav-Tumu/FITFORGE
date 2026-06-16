@@ -1,12 +1,49 @@
 rules_version = '2';
+
+// FitForge Firestore security rules.
+// - A signed-in user can only read/write their own document tree.
+// - `isPremium` is server-controlled: clients can NEVER set it. Only the
+//   `verifyPlayPurchase` / `handlePlayRtdn` Cloud Functions (which use the Admin
+//   SDK and bypass these rules) may grant entitlement after verifying a real
+//   Google Play purchase. This makes premium tamper-proof.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      allow read, write: if request.auth != null;
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
     }
 
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // True when the write does not change the server-controlled `isPremium`.
+    function premiumUnchanged() {
+      return !request.resource.data.diff(resource.data)
+        .affectedKeys().hasAny(['isPremium']);
     }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      // On first create, the doc must not claim premium.
+      allow create: if isOwner(userId)
+        && !(request.resource.data.keys().hasAny(['isPremium'])
+             && request.resource.data.isPremium == true);
+
+      // Profile updates are fine as long as they don't touch `isPremium`.
+      allow update: if isOwner(userId) && premiumUnchanged();
+
+      allow delete: if isOwner(userId);
+
+      // Logged workout sets (and any other per-user data) — owner only.
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Purchase-token -> uid mapping for Real-time Developer Notifications.
+    // Written only by Cloud Functions; clients have no access.
+    match /subscriptions/{purchaseToken} {
+      allow read, write: if false;
+    }
+
+    // Everything else is denied by default.
   }
 }

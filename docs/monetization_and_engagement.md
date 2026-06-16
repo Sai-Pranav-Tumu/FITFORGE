@@ -31,17 +31,44 @@ how to take them to production.
   fallback appears only when no products are configured — remove it before
   production.
 
-**Remaining steps before charging real money:**
+### Server-side verification (done — Cloud Functions)
+
+- `functions/index.js` contains:
+  - **`verifyPlayPurchase`** (callable): the app sends `{ productId, purchaseToken }`
+    after a purchase; the function verifies it against the Google Play Developer
+    API (`purchases.subscriptionsv2.get`), acknowledges it, and writes the
+    authoritative `isPremium` to `users/{uid}` only if the subscription is active.
+  - **`handlePlayRtdn`** (Pub/Sub): consumes Real-time Developer Notifications to
+    keep `isPremium` in sync on renewals / cancellations / refunds.
+- `BillingService._deliver` calls `verifyPlayPurchase` and applies the verified
+  result via `EntitlementService.applyVerifiedEntitlement` (no client Firestore
+  write). If the function is unreachable it falls back to a local-only grant so a
+  paying user isn't blocked; the server reconciles on the next restore/RTDN.
+- **`firestore.rules` is locked down**: clients can read their own data and update
+  their profile, but **cannot write `isPremium`** — only the Cloud Functions can.
+
+### Payment methods (UPI / cards)
+
+Google Play **requires** digital subscriptions to use Play Billing, so we do not
+use a separate UPI/card gateway (that would violate policy and risk removal).
+Play Billing already presents **UPI, cards, net banking and wallets** at checkout
+in India — the user picks one in the Google Play sheet. The paywall communicates
+this ("Secure payment via Google Play · UPI · Cards · Net banking · Wallets").
+
+### Deploy checklist before charging real money
+
 1. Create the auto-renewing subscription products in the **Play Console** with IDs
    matching `BillingService.monthlyId` / `yearlyId`
-   (`fitforge_premium_monthly`, `fitforge_premium_yearly`). Do the same in App
-   Store Connect for iOS.
-2. Add a license tester and test the purchase on an internal-testing track.
-3. **Verify receipts server-side** in `BillingService._deliver` (a Cloud Function
-   checking `purchase.verificationData`) before granting — currently client-side
-   only.
-4. Once a Cloud Function owns entitlement, switch `firestore.rules` to the
-   stricter variant that blocks clients from writing `isPremium`.
+   (`fitforge_premium_monthly`, `fitforge_premium_yearly`).
+2. Play Console → Setup → API access: link a **service account** with
+   "View financial data" + "Manage orders", and grant the functions runtime the
+   same identity so ADC can call the Android Publisher API.
+3. `cd functions && npm install`, then `firebase deploy --only functions,firestore:rules`.
+4. (Optional but recommended) Create a Pub/Sub topic `play-subscription-notifications`
+   and set it in Play Console → Monetization setup → RTDN.
+5. Add license testers and test the full purchase on an internal-testing track
+   (UPI/card both work in test).
+6. Remove the dev-only **"Unlock (testing)"** button in `paywall_screen.dart`.
 
 ### Suggested free vs. premium split
 

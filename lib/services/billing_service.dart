@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
@@ -130,11 +131,35 @@ class BillingService extends ChangeNotifier {
   }
 
   Future<void> _deliver(PurchaseDetails purchase) async {
-    // TODO: verify purchase.verificationData server-side before granting.
-    await EntitlementService.instance.setPremium(true);
-    AnalyticsService.instance.log('premium_active', {
-      'product': purchase.productID,
-    });
+    // Server-side verification: the Cloud Function checks the purchase token
+    // against the Play Developer API and writes the authoritative isPremium
+    // flag. Clients cannot grant themselves premium (Firestore rules block it).
+    final token = purchase.verificationData.serverVerificationData;
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'verifyPlayPurchase',
+      );
+      final result = await callable.call(<String, dynamic>{
+        'productId': purchase.productID,
+        'purchaseToken': token,
+      });
+      final data = result.data;
+      final granted = data is Map && data['isPremium'] == true;
+      await EntitlementService.instance.applyVerifiedEntitlement(granted);
+      AnalyticsService.instance.log('premium_verified', {
+        'product': purchase.productID,
+        'granted': granted,
+      });
+    } catch (error) {
+      // Verification unavailable (e.g. function not deployed yet, transient
+      // network error). Grant locally so a paying user isn't blocked; the
+      // server reconciles on the next restore/RTDN.
+      debugPrint('Server verification failed, granting locally: $error');
+      await EntitlementService.instance.setPremium(true);
+      AnalyticsService.instance.log('premium_verify_fallback', {
+        'product': purchase.productID,
+      });
+    }
   }
 
   @override

@@ -96,19 +96,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final selectedGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: isDark
-          ? const [
-              Color(0xFF2F7BFF),
-              Color(0xFF174ACD),
-            ]
-          : const [
-              Color(0xFF2A78FF),
-              Color(0xFF1A56DB),
-            ],
-    );
+    const selectedGradient = AppTheme.heroGradient;
 
     return Expanded(
       child: GestureDetector(

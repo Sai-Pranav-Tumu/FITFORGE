@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/exercise_library_models.dart';
 import '../models/user_model.dart';
 import '../models/workout_plan.dart';
 import '../services/analytics_service.dart';
@@ -65,12 +66,15 @@ class WorkoutProvider extends ChangeNotifier {
     await _rebuildRecommendation(clearCurrent: profileChanged);
   }
 
-  Future<void> refresh({UserModel? profile}) async {
+  /// Rebuilds the plan. [clearCurrent] false keeps the existing plan on screen
+  /// while recomputing (used for pull-to-refresh so the dashboard doesn't flash
+  /// to an empty/loading state).
+  Future<void> refresh({UserModel? profile, bool clearCurrent = true}) async {
     if (profile != null || _profile != null) {
       _profile = profile ?? _profile;
       _profileSignature = _buildProfileSignature(_profile);
     }
-    await _rebuildRecommendation(clearCurrent: true);
+    await _rebuildRecommendation(clearCurrent: clearCurrent);
   }
 
   Future<void> _rebuildRecommendation({bool clearCurrent = false}) async {
@@ -89,16 +93,21 @@ class WorkoutProvider extends ChangeNotifier {
       _recommendation = null;
     }
     _loading = true;
-    notifyListeners();
+    // Only rebuild into a loading state when there's nothing to show. Otherwise
+    // keep the current plan visible (no flash) while we recompute in the
+    // background — this avoids the pull-to-refresh stutter.
+    if (clearCurrent || _recommendation == null) {
+      notifyListeners();
+    }
 
     try {
       await _library.initialize();
       WorkoutRecommendation? nextRecommendation;
       String? nextError;
       if (_profile != null && _library.exercises.isNotEmpty) {
-        nextRecommendation = WorkoutEngineService.buildRecommendation(
-          profile: _profile!,
-          exercises: _library.exercises,
+        nextRecommendation = await _buildRecommendationOffThread(
+          _profile!,
+          _library.exercises,
         );
         nextError = _library.error;
       } else {
@@ -127,6 +136,27 @@ class WorkoutProvider extends ChangeNotifier {
         _loading = false;
         notifyListeners();
       }
+    }
+  }
+
+  /// Runs the (CPU-heavy) recommendation build on a background isolate so it
+  /// never janks the UI thread. Falls back to an inline build if the isolate
+  /// can't be used.
+  Future<WorkoutRecommendation> _buildRecommendationOffThread(
+    UserModel profile,
+    List<ExerciseDefinition> exercises,
+  ) async {
+    try {
+      return await compute(
+        _computeRecommendation,
+        _RecommendationParams(profile, exercises),
+      );
+    } catch (error) {
+      debugPrint('Recommendation isolate failed, computing inline: $error');
+      return WorkoutEngineService.buildRecommendation(
+        profile: profile,
+        exercises: exercises,
+      );
     }
   }
 
@@ -190,4 +220,20 @@ class WorkoutProvider extends ChangeNotifier {
     _library.removeListener(_handleLibraryChanged);
     super.dispose();
   }
+}
+
+/// Arguments bundle for the background recommendation build.
+class _RecommendationParams {
+  final UserModel profile;
+  final List<ExerciseDefinition> exercises;
+
+  const _RecommendationParams(this.profile, this.exercises);
+}
+
+/// Top-level isolate entry point (required by `compute`).
+WorkoutRecommendation _computeRecommendation(_RecommendationParams params) {
+  return WorkoutEngineService.buildRecommendation(
+    profile: params.profile,
+    exercises: params.exercises,
+  );
 }
