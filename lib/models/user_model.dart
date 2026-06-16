@@ -28,6 +28,16 @@ class UserModel {
   final int workoutDays;
   final double weight;
   final double height;
+  final double targetWeight;
+
+  /// Weight captured when the current goal/target was set, used as the baseline
+  /// for goal-progress indicators. 0 when never set.
+  final double startWeight;
+  final String injuryNotes;
+
+  /// Adaptive difficulty bias from post-workout feedback, clamped to [-2, 2].
+  /// Negative => ease off volume, positive => add volume.
+  final int intensityAdjustment;
   final String avatarKey;
   final String preferredUnits;
   final String dietaryPreference;
@@ -93,6 +103,33 @@ class UserModel {
   bool hasCompletedWorkoutOn(DateTime date) =>
       workoutCompletionDates.contains(workoutDateKey(date));
 
+  /// Body Mass Index, or 0 when height/weight are not set yet.
+  double get bmi {
+    if (weight <= 0 || height <= 0) return 0;
+    final heightM = height / 100.0;
+    return weight / (heightM * heightM);
+  }
+
+  bool get hasTargetWeight => targetWeight > 0;
+
+  /// Signed kilograms still to go to reach the target (positive => need to lose).
+  double get weightRemainingToTarget =>
+      targetWeight > 0 && weight > 0 ? weight - targetWeight : 0.0;
+
+  /// 0..1 progress from [startWeight] toward [targetWeight]. Null when it cannot
+  /// be computed (no target/weight set).
+  double? get goalProgress {
+    if (targetWeight <= 0 || weight <= 0) return null;
+    final base = startWeight > 0 ? startWeight : weight;
+    if ((base - targetWeight).abs() < 0.1) {
+      return (weight - targetWeight).abs() < 0.5 ? 1.0 : 0.0;
+    }
+    return ((base - weight) / (base - targetWeight)).clamp(0.0, 1.0);
+  }
+
+  bool get hasReachedWeightGoal =>
+      targetWeight > 0 && weight > 0 && (weight - targetWeight).abs() < 0.5;
+
   UserModel({
     required this.id,
     required this.email,
@@ -105,6 +142,10 @@ class UserModel {
     this.workoutDays = 3,
     this.weight = 0.0,
     this.height = 170.0,
+    this.targetWeight = 0.0,
+    this.startWeight = 0.0,
+    this.injuryNotes = '',
+    this.intensityAdjustment = 0,
     this.avatarKey = 'person',
     this.preferredUnits = 'metric',
     this.dietaryPreference = DietaryPreferenceCodes.mixed,
@@ -131,6 +172,10 @@ class UserModel {
     int? workoutDays,
     double? weight,
     double? height,
+    double? targetWeight,
+    double? startWeight,
+    String? injuryNotes,
+    int? intensityAdjustment,
     String? avatarKey,
     String? preferredUnits,
     String? dietaryPreference,
@@ -158,6 +203,10 @@ class UserModel {
       workoutDays: workoutDays ?? this.workoutDays,
       weight: weight ?? this.weight,
       height: height ?? this.height,
+      targetWeight: targetWeight ?? this.targetWeight,
+      startWeight: startWeight ?? this.startWeight,
+      injuryNotes: injuryNotes ?? this.injuryNotes,
+      intensityAdjustment: intensityAdjustment ?? this.intensityAdjustment,
       avatarKey: avatarKey ?? this.avatarKey,
       preferredUnits: preferredUnits ?? this.preferredUnits,
       dietaryPreference: normalizeDietaryPreference(
@@ -202,6 +251,10 @@ class UserModel {
       workoutDays: json['workoutDays'] ?? 3,
       weight: (json['weight'] ?? 0.0).toDouble(),
       height: (json['height'] ?? 170.0).toDouble(),
+      targetWeight: (json['targetWeight'] ?? 0.0).toDouble(),
+      startWeight: (json['startWeight'] ?? 0.0).toDouble(),
+      injuryNotes: json['injuryNotes'] ?? '',
+      intensityAdjustment: (json['intensityAdjustment'] ?? 0) as int,
       avatarKey: json['avatarKey'] ?? 'person',
       preferredUnits: json['preferredUnits'] ?? 'metric',
       dietaryPreference: normalizeDietaryPreference(
@@ -254,6 +307,10 @@ class UserModel {
       'workoutDays': workoutDays,
       'weight': weight,
       'height': height,
+      'targetWeight': targetWeight,
+      'startWeight': startWeight,
+      'injuryNotes': injuryNotes,
+      'intensityAdjustment': intensityAdjustment,
       'avatarKey': avatarKey,
       'preferredUnits': preferredUnits,
       'dietaryPreference': dietaryPreference,

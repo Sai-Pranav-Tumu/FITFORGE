@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,7 +7,9 @@ import '../../models/workout_plan.dart';
 import '../../providers/workout_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../screens/workout/workout_session_screen.dart';
+import '../../services/analytics_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/exercise_media.dart';
 import '../../widgets/top_app_bar.dart';
 
 class WorkoutScreen extends StatelessWidget {
@@ -27,9 +28,10 @@ class WorkoutScreen extends StatelessWidget {
           return const _WorkoutLoadingState();
         }
 
-        if (!workoutProvider.hasExercises ||
-            (workoutProvider.syncingLibrary &&
-                !workoutProvider.hasFullDataset)) {
+        // Only hard-block when there is genuinely nothing to show. With the
+        // bundled starter pack loaded this is rare; the upgrade to the full
+        // library happens via an in-content banner instead.
+        if (!workoutProvider.hasExercises) {
           return _WorkoutDownloadPrompt(
             syncingLibrary: workoutProvider.syncingLibrary,
             errorMessage: workoutProvider.error,
@@ -217,6 +219,101 @@ class _WorkoutContentState extends State<_WorkoutContent> {
       barrierDismissible: true,
       builder: (_) => _WorkoutCompletionDialog(result: result!),
     );
+
+    if (mounted) {
+      await _promptWorkoutFeedback();
+    }
+  }
+
+  Future<void> _promptWorkoutFeedback() async {
+    final feedback = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) {
+        final cs = Theme.of(sheetContext).colorScheme;
+        Widget option(String value, String emoji, String label, String sub) {
+          return ListTile(
+            leading: Text(emoji, style: const TextStyle(fontSize: 26)),
+            title: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Text(sub),
+            onTap: () => Navigator.of(sheetContext).pop(value),
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'How did that workout feel?',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'We use this to fine-tune your next sessions.',
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 10),
+                option(
+                  'too_easy',
+                  '😎',
+                  'Too easy',
+                  'Add a bit more volume next time',
+                ),
+                option('just_right', '💪', 'Just right', 'Keep this intensity'),
+                option(
+                  'too_hard',
+                  '🥵',
+                  'Too hard',
+                  'Ease off the volume a little',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (feedback == null || !mounted) {
+      return;
+    }
+
+    final userProvider = context.read<UserProvider>();
+    final workoutProvider = context.read<WorkoutProvider>();
+    final profile = userProvider.userProfile;
+    if (profile == null) {
+      return;
+    }
+
+    final current = profile.intensityAdjustment;
+    final next = switch (feedback) {
+      'too_easy' => (current + 1).clamp(-2, 2),
+      'too_hard' => (current - 1).clamp(-2, 2),
+      _ => current,
+    };
+    AnalyticsService.instance.logWorkoutFeedback(feedback);
+
+    if (next != current) {
+      final updated = profile.copyWith(intensityAdjustment: next);
+      await userProvider.updateProfile(updated);
+      await workoutProvider.refresh(profile: updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              feedback == 'too_easy'
+                  ? 'Got it — your upcoming sessions will ramp up.'
+                  : 'Got it — we’ll ease off your upcoming sessions.',
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -260,6 +357,10 @@ class _WorkoutContentState extends State<_WorkoutContent> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (profile.hasTargetWeight) ...[
+                _GoalProgressCard(profile: profile),
+                const SizedBox(height: 14),
+              ],
               Row(
                 children: [
                   Expanded(
@@ -429,18 +530,47 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: _cardDecoration(context),
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.cloud_download_outlined,
-                        color: colorScheme.primary,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.cloud_download_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Using the starter exercise pack',
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'You can train now with a curated set. Download the full library to unlock hundreds more exercises with animated demos.',
+                                  style: TextStyle(
+                                    color: colorScheme.onSurfaceVariant,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'A local exercise dataset is currently active. The full library will appear automatically after sync completes.',
-                          style: TextStyle(color: colorScheme.onSurfaceVariant),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () => context
+                              .read<WorkoutProvider>()
+                              .acceptExerciseLibraryDownload(),
+                          icon: const Icon(Icons.download_rounded, size: 18),
+                          label: const Text('Download full library'),
                         ),
                       ),
                     ],
@@ -1375,24 +1505,130 @@ class _RoutineExerciseThumbnailState extends State<_RoutineExerciseThumbnail> {
         onTap: _startPreview,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 260),
-          child: widget.exercise.animationFramesSource == 'file'
-              ? Image.file(
-                  File(frame),
-                  key: ValueKey<String>(frame),
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  errorBuilder: (_, _, _) =>
-                      Icon(widget.fallbackIcon, color: colorScheme.primary),
-                )
-              : Image.asset(
-                  frame,
-                  key: ValueKey<String>(frame),
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  errorBuilder: (_, _, _) =>
-                      Icon(widget.fallbackIcon, color: colorScheme.primary),
-                ),
+          child: ExerciseMedia(
+            key: ValueKey<String>(frame),
+            path: frame,
+            source: widget.exercise.animationFramesSource,
+            fit: BoxFit.cover,
+            fallbackBuilder: (_) =>
+                Icon(widget.fallbackIcon, color: colorScheme.primary),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _GoalProgressCard extends StatelessWidget {
+  final UserModel profile;
+
+  const _GoalProgressCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isImperial = profile.preferredUnits == 'imperial';
+    final progress = profile.goalProgress ?? 0.0;
+    final reached = profile.hasReachedWeightGoal;
+    final remaining = profile.weightRemainingToTarget;
+
+    String fmt(double kg) {
+      if (isImperial) return '${(kg * 2.20462).toStringAsFixed(1)} lb';
+      return '${kg.toStringAsFixed(1)} kg';
+    }
+
+    final losing = remaining > 0;
+    final headline = reached
+        ? 'Goal weight reached 🎉'
+        : '${fmt(remaining.abs())} to ${losing ? 'lose' : 'gain'}';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.primaryContainer.withValues(alpha: 0.16),
+            AppTheme.tertiary.withValues(alpha: 0.12),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppTheme.primaryContainer.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.flag_rounded,
+                color: AppTheme.primaryContainer,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'WEIGHT GOAL',
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w800,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${(progress * 100).round()}%',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.primaryContainer,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            headline,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 10,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppTheme.primaryContainer,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Now ${fmt(profile.weight)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                'Goal ${fmt(profile.targetWeight)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

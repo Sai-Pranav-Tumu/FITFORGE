@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -23,6 +24,23 @@ class ExerciseLibraryService extends ChangeNotifier
       'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
   static const String _defaultImageBaseUrl =
       'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+
+  // Secondary dataset (hasaneyldrm/exercises-dataset) that provides animated
+  // GIF demonstrations. On a name collision we keep the richer free-exercise-db
+  // metadata (force/level/mechanic) but adopt this dataset's GIF; exercises that
+  // exist only here are added as new entries.
+  static const String _gifDatasetUrl =
+      'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/exercises.json';
+  static const String _gifBaseUrl =
+      'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/';
+  // Bump this when the merge logic changes so existing installs re-sync.
+  static const String _datasetSchemaTag = 'gifmerge-v2-lazygif';
+
+  // Bundled starter pack so users can train immediately, before downloading the
+  // full library. Loaded from assets when no full dataset is present yet.
+  static const String _starterAssetDir = 'assets/exercise_library';
+  static const String _starterManifestAsset =
+      '$_starterAssetDir/starter_exercises.json';
 
   static const String manifestUrl = String.fromEnvironment(
     'FITFORGE_EXERCISE_MANIFEST_URL',
@@ -75,6 +93,9 @@ class ExerciseLibraryService extends ChangeNotifier
     _attachLifecycleObserverIfNeeded();
     await _loadConsentState();
     await _loadLocalDatasetIfAvailable();
+    if (!_hasFullDataset) {
+      await _loadStarterPackIfNeeded();
+    }
     _initialized = true;
     notifyListeners();
 
@@ -186,6 +207,9 @@ class ExerciseLibraryService extends ChangeNotifier
               images: exercise.images
                   .map((relative) => p.join(imageDir.path, relative))
                   .toList(growable: false),
+              // GIFs are stored as remote URLs and streamed/cached on demand,
+              // so leave them untouched (only local image frames are rebased).
+              gif: exercise.gif,
               imageSource: 'file',
             ),
           )
@@ -199,6 +223,44 @@ class ExerciseLibraryService extends ChangeNotifier
     } catch (error) {
       _error = 'Failed to load cached exercise library: $error';
       notifyListeners();
+    }
+  }
+
+  /// Loads the bundled starter exercises so the app is usable before the full
+  /// library download. Keeps [_hasFullDataset] false so the upgrade prompt
+  /// still appears.
+  Future<void> _loadStarterPackIfNeeded() async {
+    if (_exercises.isNotEmpty) {
+      return;
+    }
+    try {
+      final raw = await rootBundle.loadString(_starterManifestAsset);
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) {
+        return;
+      }
+      _exercises = decoded
+          .whereType<Map>()
+          .map(
+            (entry) =>
+                ExerciseDefinition.fromJson(entry.cast<String, dynamic>()),
+          )
+          .map(
+            (exercise) => exercise.copyWith(
+              images: exercise.images
+                  .map((relative) => '$_starterAssetDir/$relative')
+                  .toList(growable: false),
+              gif: exercise.gif.isEmpty
+                  ? ''
+                  : '$_starterAssetDir/${exercise.gif}',
+              imageSource: 'asset',
+            ),
+          )
+          .toList(growable: false);
+      _activeVersion = 'starter';
+      notifyListeners();
+    } catch (error) {
+      debugPrint('Starter exercise pack load failed: $error');
     }
   }
 
@@ -223,13 +285,14 @@ class ExerciseLibraryService extends ChangeNotifier
 
       final prefs = await SharedPreferences.getInstance();
       final currentVersion = prefs.getString(_versionKey);
+      final targetVersion = '${manifest.version}+$_datasetSchemaTag';
       final datasetFile = await _localDatasetFile();
 
       final shouldDownload =
-          currentVersion != manifest.version || !await datasetFile.exists();
+          currentVersion != targetVersion || !await datasetFile.exists();
       if (!shouldDownload) {
         _hasFullDataset = true;
-        _activeVersion = currentVersion ?? manifest.version;
+        _activeVersion = currentVersion ?? targetVersion;
         _updateDownloadState(
           phase: 'ready',
           progress: 1.0,
@@ -252,15 +315,31 @@ class ExerciseLibraryService extends ChangeNotifier
       );
 
       _updateDownloadState(
+        phase: 'gif_dataset',
+        progress: 0.20,
+        message: 'Adding animated exercise demonstrations…',
+      );
+      final mergedExercises = await _mergeGifDataset(preparedExercises);
+
+      _updateDownloadState(
         phase: 'images',
         progress: 0.22,
         message: 'Downloading exercise libraries…',
       );
-      await _downloadAllImages(
-        exercises: preparedExercises,
-        imageBaseUrl: manifestUri.resolve(manifest.imageBaseUrl).toString(),
+      await _downloadAssetFiles(
+        exercises: mergedExercises,
+        relativePathsOf: _imagePathsOf,
+        baseUrl: manifestUri.resolve(manifest.imageBaseUrl).toString(),
         expectedTotalBytes: _resolveImageLibraryTotalBytes(manifest),
+        startProgress: 0.22,
+        endProgress: 0.90,
+        phase: 'images',
+        label: 'Downloading exercise libraries',
       );
+
+      // NOTE: GIFs are intentionally NOT bulk-downloaded. The merged dataset
+      // stores remote GIF URLs that are streamed and disk-cached on demand
+      // (CachedNetworkImage), so the full-library download stays light.
 
       _updateDownloadState(
         phase: 'setup',
@@ -270,15 +349,15 @@ class ExerciseLibraryService extends ChangeNotifier
       await datasetFile.parent.create(recursive: true);
       const encoder = JsonEncoder.withIndent('  ');
       await datasetFile.writeAsString(
-        '${encoder.convert(preparedExercises)}\n',
+        '${encoder.convert(mergedExercises)}\n',
       );
       _updateDownloadState(
         phase: 'setup',
         progress: 0.97,
         message: 'Loading personalized workouts…',
       );
-      await prefs.setString(_versionKey, manifest.version);
-      _activeVersion = manifest.version;
+      await prefs.setString(_versionKey, targetVersion);
+      _activeVersion = targetVersion;
       await _loadLocalDatasetIfAvailable();
       _hasFullDataset = true;
       _updateDownloadState(
@@ -410,29 +489,43 @@ class ExerciseLibraryService extends ChangeNotifier
     return normalized;
   }
 
-  Future<void> _downloadAllImages({
+  static List<String> _imagePathsOf(Map<String, dynamic> exercise) {
+    final images = exercise['images'];
+    if (images is! List) {
+      return const <String>[];
+    }
+    return images
+        .map((image) => '$image'.trim())
+        .where((path) => path.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  /// Downloads a set of remote asset files (images or GIFs) referenced by the
+  /// exercises, writing them under the local images directory at the same
+  /// relative path. Progress is reported within [startProgress]..[endProgress].
+  Future<void> _downloadAssetFiles({
     required List<Map<String, dynamic>> exercises,
-    required String imageBaseUrl,
+    required List<String> Function(Map<String, dynamic>) relativePathsOf,
+    required String baseUrl,
     required int expectedTotalBytes,
+    required double startProgress,
+    required double endProgress,
+    required String phase,
+    required String label,
   }) async {
     final imageDir = await _localImagesDir();
     final tasks = <_ImageDownloadTask>[];
-    final failedImages = <String>[];
+    final failed = <String>[];
     final seen = <String>{};
 
     for (final exercise in exercises) {
-      final images = exercise['images'];
-      if (images is! List) {
-        continue;
-      }
-      for (final image in images) {
-        final relativePath = '$image'.trim();
+      for (final relativePath in relativePathsOf(exercise)) {
         if (relativePath.isEmpty || !seen.add(relativePath)) {
           continue;
         }
         tasks.add(
           _ImageDownloadTask(
-            uri: Uri.parse('$imageBaseUrl$relativePath'),
+            uri: Uri.parse('$baseUrl$relativePath'),
             file: File(p.join(imageDir.path, relativePath)),
           ),
         );
@@ -441,31 +534,35 @@ class ExerciseLibraryService extends ChangeNotifier
 
     if (tasks.isEmpty) {
       _updateDownloadState(
-        phase: 'images',
-        progress: 0.88,
+        phase: phase,
+        progress: endProgress,
         message: 'Preparing downloaded exercise files…',
       );
       return;
     }
 
+    final span = endProgress - startProgress;
     final totalTasks = tasks.length;
     var processedTasks = 0;
     var downloadedBytes = 0;
     const concurrency = 6;
     var next = 0;
 
-    void updateImageDownloadProgress() {
+    void updateProgress() {
+      final message = expectedTotalBytes > 0
+          ? _libraryDownloadProgressMessage(
+              downloadedBytes: downloadedBytes,
+              totalBytes: expectedTotalBytes,
+            )
+          : '$label (${processedTasks.clamp(0, totalTasks)}/$totalTasks)…';
       _updateDownloadState(
-        phase: 'images',
-        progress: 0.22 + 0.66 * (processedTasks / totalTasks),
-        message: _libraryDownloadProgressMessage(
-          downloadedBytes: downloadedBytes,
-          totalBytes: expectedTotalBytes,
-        ),
+        phase: phase,
+        progress: startProgress + span * (processedTasks / totalTasks),
+        message: message,
       );
     }
 
-    updateImageDownloadProgress();
+    updateProgress();
 
     Future<void> worker() async {
       while (true) {
@@ -479,7 +576,7 @@ class ExerciseLibraryService extends ChangeNotifier
           if (existingLength > 0) {
             processedTasks++;
             downloadedBytes += existingLength;
-            updateImageDownloadProgress();
+            updateProgress();
             continue;
           }
         }
@@ -487,22 +584,207 @@ class ExerciseLibraryService extends ChangeNotifier
           final bytesDownloaded = await _downloadFile(task.uri, task.file);
           downloadedBytes += bytesDownloaded;
         } catch (error) {
-          failedImages.add(task.uri.toString());
-          debugPrint('Exercise image download failed: ${task.uri} - $error');
+          failed.add(task.uri.toString());
+          debugPrint('Exercise asset download failed: ${task.uri} - $error');
         } finally {
           processedTasks++;
-          updateImageDownloadProgress();
+          updateProgress();
         }
       }
     }
 
     await Future.wait(List.generate(concurrency, (_) => worker()));
 
-    if (failedImages.isNotEmpty) {
+    if (failed.isNotEmpty) {
       debugPrint(
-        'Exercise library finished with ${failedImages.length} image download failures.',
+        'Exercise library finished with ${failed.length} $phase download failures.',
       );
     }
+  }
+
+  /// Fetches the GIF dataset and merges it into [baseExercises]. On a
+  /// normalized-name collision the base (free-exercise-db) entry keeps its
+  /// metadata but gains the GIF; GIF-only exercises are appended as new
+  /// entries with inferred metadata.
+  Future<List<Map<String, dynamic>>> _mergeGifDataset(
+    List<Map<String, dynamic>> baseExercises,
+  ) async {
+    List<Map<String, dynamic>> gifExercises;
+    try {
+      gifExercises = await _downloadRemoteDataset(_gifDatasetUrl);
+    } catch (error) {
+      debugPrint('GIF dataset fetch failed, continuing without GIFs: $error');
+      return baseExercises;
+    }
+    if (gifExercises.isEmpty) {
+      return baseExercises;
+    }
+
+    // Index GIF entries by normalized name (first one wins).
+    final gifByName = <String, Map<String, dynamic>>{};
+    for (final gifExercise in gifExercises) {
+      final key = _normalizeExerciseName('${gifExercise['name'] ?? ''}');
+      if (key.isEmpty) {
+        continue;
+      }
+      gifByName.putIfAbsent(key, () => gifExercise);
+    }
+
+    final merged = <Map<String, dynamic>>[];
+    final usedGifKeys = <String>{};
+    final usedIds = <String>{
+      for (final exercise in baseExercises) '${exercise['id'] ?? ''}',
+    };
+
+    // 1. Existing exercises keep their metadata, gain a GIF when matched.
+    for (final exercise in baseExercises) {
+      final key = _normalizeExerciseName('${exercise['name'] ?? ''}');
+      final gifExercise = gifByName[key];
+      if (gifExercise != null) {
+        final gifPath = _sanitizeRelativePath('${gifExercise['gif_url'] ?? ''}');
+        if (gifPath.isNotEmpty) {
+          exercise['gif'] = '$_gifBaseUrl$gifPath';
+          usedGifKeys.add(key);
+        }
+      }
+      merged.add(exercise);
+    }
+
+    // 2. GIF-only exercises become new entries with inferred metadata.
+    for (final entry in gifByName.entries) {
+      if (usedGifKeys.contains(entry.key)) {
+        continue;
+      }
+      final gifExercise = entry.value;
+      final gifPath = _sanitizeRelativePath('${gifExercise['gif_url'] ?? ''}');
+      if (gifPath.isEmpty) {
+        continue;
+      }
+      final name = '${gifExercise['name'] ?? ''}'.trim();
+      if (name.isEmpty) {
+        continue;
+      }
+
+      var id = _slugify(name);
+      while (!usedIds.add(id)) {
+        id = '${id}_x';
+      }
+
+      final equipment = '${gifExercise['equipment'] ?? ''}'.trim();
+      final primaryMuscles = _gifPrimaryMuscles(gifExercise);
+      final secondaryMuscles = _sanitizeStringList(
+        gifExercise['secondary_muscles'],
+      );
+      final category = '${gifExercise['category'] ?? gifExercise['body_part'] ?? ''}'
+          .trim();
+
+      merged.add(<String, dynamic>{
+        'id': id,
+        'name': name,
+        // The GIF dataset lacks force/level/mechanic, which the recommendation
+        // scoring relies on, so infer them from the name/equipment/muscles.
+        'force': _inferForce(name),
+        'level': _inferLevel(name, equipment),
+        'mechanic': _inferMechanic(name, primaryMuscles, secondaryMuscles),
+        'equipment': equipment,
+        'primaryMuscles': primaryMuscles,
+        'secondaryMuscles': secondaryMuscles,
+        'instructions': _gifInstructions(gifExercise),
+        'category': category,
+        'images': const <String>[],
+        'gif': '$_gifBaseUrl$gifPath',
+      });
+    }
+
+    return merged;
+  }
+
+  String _inferForce(String name) {
+    final n = name.toLowerCase();
+    const pull = ['row', 'pull', 'curl', 'chin', 'deadlift', 'pulldown', 'face pull'];
+    const push = ['press', 'push', 'dip', 'extension', 'fly', 'raise', 'thruster', 'jerk'];
+    if (pull.any(n.contains)) return 'pull';
+    if (push.any(n.contains)) return 'push';
+    return '';
+  }
+
+  String _inferLevel(String name, String equipment) {
+    final n = name.toLowerCase();
+    const advanced = [
+      'muscle up',
+      'muscle-up',
+      'planche',
+      'pistol',
+      'snatch',
+      'clean and jerk',
+      'one arm',
+      'one-arm',
+      'handstand',
+    ];
+    if (advanced.any(n.contains)) return 'advanced';
+    final eq = equipment.toLowerCase();
+    if (eq.contains('barbell') || eq.contains('olympic') || eq.contains('cable')) {
+      return 'intermediate';
+    }
+    return 'beginner';
+  }
+
+  String _inferMechanic(
+    String name,
+    List<String> primaryMuscles,
+    List<String> secondaryMuscles,
+  ) {
+    final n = name.toLowerCase();
+    const compoundMoves = [
+      'squat',
+      'deadlift',
+      'press',
+      'row',
+      'pull up',
+      'pull-up',
+      'chin up',
+      'chin-up',
+      'lunge',
+      'dip',
+      'thruster',
+      'clean',
+      'snatch',
+      'push up',
+      'push-up',
+    ];
+    if (compoundMoves.any(n.contains)) return 'compound';
+    // Movements that recruit several muscle groups are treated as compound.
+    if (secondaryMuscles.length >= 2) return 'compound';
+    return 'isolation';
+  }
+
+  List<String> _gifPrimaryMuscles(Map<String, dynamic> gifExercise) {
+    final muscles = <String>[];
+    final target = '${gifExercise['target'] ?? ''}'.trim();
+    if (target.isNotEmpty) {
+      muscles.add(target);
+    }
+    final group = '${gifExercise['muscle_group'] ?? ''}'.trim();
+    if (group.isNotEmpty && group.toLowerCase() != target.toLowerCase()) {
+      muscles.add(group);
+    }
+    return muscles;
+  }
+
+  List<String> _gifInstructions(Map<String, dynamic> gifExercise) {
+    final steps = gifExercise['instruction_steps'];
+    if (steps is Map && steps['en'] != null) {
+      return _sanitizeStringList(steps['en']);
+    }
+    final instructions = gifExercise['instructions'];
+    if (instructions is Map && instructions['en'] != null) {
+      return _sanitizeStringList(instructions['en']);
+    }
+    return _sanitizeStringList(instructions);
+  }
+
+  String _normalizeExerciseName(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
   Future<Object?> _getJson(Uri uri) async {

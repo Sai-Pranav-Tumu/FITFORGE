@@ -116,18 +116,40 @@ class TdeeEngine {
     final tdee = bmr * _multiplierFor(activityLevel);
 
     final goal = user.fitnessGoal.trim().toLowerCase();
+    // How far (kg) the user is from their target weight, when one is set.
+    // Positive => wants to lose, negative => wants to gain.
+    final targetWeight = user.targetWeight;
+    final weightGap = targetWeight > 0 ? weight - targetWeight : 0.0;
+
     late final double targetCalories;
     late final String goalLabel;
 
     if (goal.contains('lose') || goal.contains('weight')) {
-      targetCalories = math.max(isMale ? 1500.0 : 1200.0, tdee - 400);
+      // Scale the deficit with how much weight is left to lose: a larger gap
+      // earns a slightly larger (still safe) deficit, a near-target gap eases
+      // off so the last kilos come off gently.
+      final deficit = weightGap > 0
+          ? (300.0 + weightGap * 20.0).clamp(300.0, 650.0)
+          : 400.0;
+      targetCalories = math.max(isMale ? 1500.0 : 1200.0, tdee - deficit);
       goalLabel = 'Fat Loss';
     } else if (goal.contains('muscle') || goal.contains('gain')) {
-      targetCalories = tdee + 250;
+      // Lean surplus, a touch larger when there is real weight to put on.
+      final surplus = weightGap < 0
+          ? (250.0 + weightGap.abs() * 12.0).clamp(250.0, 450.0)
+          : 250.0;
+      targetCalories = tdee + surplus;
       goalLabel = 'Muscle Gain';
     } else if (goal.contains('stamina') || goal.contains('endurance')) {
       targetCalories = tdee + 150;
       goalLabel = 'Endurance';
+    } else if (weightGap > 1.0) {
+      // "Stay Active" but a lower target weight is set: trend gently down.
+      targetCalories = math.max(isMale ? 1500.0 : 1200.0, tdee - 250);
+      goalLabel = 'Gentle Fat Loss';
+    } else if (weightGap < -1.0) {
+      targetCalories = tdee + 200;
+      goalLabel = 'Gentle Gain';
     } else {
       targetCalories = tdee;
       goalLabel = 'Maintenance';

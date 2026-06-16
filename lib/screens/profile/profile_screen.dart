@@ -11,8 +11,12 @@ import '../../providers/diet_plan_provider.dart';
 import '../../providers/nutrition_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/workout_provider.dart';
+import '../../services/entitlement_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/nutrition_service.dart';
 import '../../theme/app_theme.dart';
+import '../premium/paywall_screen.dart';
+import '../workout/workout_history_screen.dart';
 import '../../utils/dietary_preferences.dart';
 import '../../widgets/auth_error_card.dart';
 import '../../widgets/dark_mode_toggle.dart';
@@ -560,6 +564,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               if (healthyRange != '--')
                 _smallChip('Healthy range $healthyRange'),
+              if (user?.hasTargetWeight ?? false)
+                _smallChip('Target ${_displayTargetWeight(user)}'),
             ],
           ),
           const SizedBox(height: 14),
@@ -800,6 +806,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Icons.person,
                 'Edit Profile',
                 onTap: () => _showEditProfileDialog(context),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+              ),
+              const SizedBox(height: 24),
+              _buildSettingsRow(
+                context,
+                Icons.history_rounded,
+                'Workout Log',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const WorkoutHistoryScreen(),
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+              ),
+              const SizedBox(height: 24),
+              _buildSettingsRow(
+                context,
+                Icons.notifications_active_outlined,
+                'Workout Reminders',
+                onTap: () => _showRemindersSheet(context),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+              ),
+              const SizedBox(height: 24),
+              _buildSettingsRow(
+                context,
+                Icons.workspace_premium_outlined,
+                context.watch<EntitlementService>().isPremium
+                    ? 'FitForge Premium (active)'
+                    : 'Go Premium',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const PaywallScreen(),
+                  ),
+                ),
                 trailing: const Icon(Icons.chevron_right, size: 20),
               ),
               const SizedBox(height: 24),
@@ -1178,6 +1218,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${weight.toStringAsFixed(1)} kg';
   }
 
+  String _displayTargetWeight(UserModel? user) {
+    final target = user?.targetWeight ?? 0.0;
+    final units = user?.preferredUnits ?? 'metric';
+    if (units == 'imperial') {
+      return '${(target * 2.20462).toStringAsFixed(1)} lb';
+    }
+    return '${target.toStringAsFixed(1)} kg';
+  }
+
   String _displayHeight(UserModel? user) {
     final height = user?.height ?? 170.0;
     final units = user?.preferredUnits ?? 'metric';
@@ -1218,6 +1267,162 @@ class _ProfileScreenState extends State<ProfileScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  Future<void> _showRemindersSheet(BuildContext context) async {
+    final settings = await NotificationService.instance
+        .loadWorkoutReminderSettings();
+    if (!context.mounted) return;
+
+    var enabled = settings.enabled;
+    var hour = settings.hour;
+    var minute = settings.minute;
+    var weekdays = Set<int>.from(settings.weekdays);
+    var streak = settings.streakNudge;
+    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheet) {
+            final cs = Theme.of(sheetContext).colorScheme;
+            final timeLabel = TimeOfDay(
+              hour: hour,
+              minute: minute,
+            ).format(sheetContext);
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Workout Reminders',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'A nudge on your training days, plus an optional evening streak-saver.',
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Enable reminders'),
+                      value: enabled,
+                      onChanged: (v) => setSheet(() => enabled = v),
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      enabled: enabled,
+                      title: const Text('Reminder time'),
+                      trailing: Text(
+                        timeLabel,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.primaryContainer,
+                        ),
+                      ),
+                      onTap: enabled
+                          ? () async {
+                              final picked = await showTimePicker(
+                                context: sheetContext,
+                                initialTime: TimeOfDay(
+                                  hour: hour,
+                                  minute: minute,
+                                ),
+                              );
+                              if (picked != null) {
+                                setSheet(() {
+                                  hour = picked.hour;
+                                  minute = picked.minute;
+                                });
+                              }
+                            }
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    Opacity(
+                      opacity: enabled ? 1 : 0.5,
+                      child: Wrap(
+                        spacing: 8,
+                        children: List.generate(7, (i) {
+                          final day = i + 1;
+                          final selected = weekdays.contains(day);
+                          return FilterChip(
+                            label: Text(dayLabels[i]),
+                            selected: selected,
+                            showCheckmark: false,
+                            onSelected: enabled
+                                ? (_) => setSheet(() {
+                                    if (selected) {
+                                      weekdays.remove(day);
+                                    } else {
+                                      weekdays.add(day);
+                                    }
+                                  })
+                                : null,
+                          );
+                        }),
+                      ),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Evening streak-saver'),
+                      subtitle: const Text('Reminds you if you havenʼt logged a workout'),
+                      value: streak,
+                      onChanged: enabled
+                          ? (v) => setSheet(() => streak = v)
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () async {
+                          final navigator = Navigator.of(sheetContext);
+                          final messenger = ScaffoldMessenger.of(context);
+                          await NotificationService.instance
+                              .applyWorkoutReminderSettings(
+                                WorkoutReminderSettings(
+                                  enabled: enabled,
+                                  hour: hour,
+                                  minute: minute,
+                                  weekdays: weekdays.isEmpty
+                                      ? {1, 2, 3, 4, 5, 6, 7}
+                                      : weekdays,
+                                  streakNudge: streak,
+                                ),
+                              );
+                          navigator.pop();
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                enabled
+                                    ? 'Reminders updated.'
+                                    : 'Reminders turned off.',
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text('Save reminders'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showUnitsSheet(BuildContext context) async {
@@ -1401,6 +1606,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     var sessionDurationMinutes = user.sessionDurationMinutes;
     var targetMuscleFocuses = user.targetMuscleFocuses.toSet();
     var jointSensitivities = user.jointSensitivities.toSet();
+    var dietaryPreference = normalizeDietaryPreference(user.dietaryPreference);
+    final injuryController = TextEditingController(text: user.injuryNotes);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -1793,6 +2000,97 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           }),
                         ),
+                        const SizedBox(height: 14),
+                        choiceGroup(
+                          'Diet Preference',
+                          'Used to rebuild your weekly meal plan.',
+                          Icons.restaurant_menu_rounded,
+                          AppTheme.primaryContainer,
+                          dietaryPreferenceOptions
+                              .map((option) => option.label)
+                              .toList(),
+                          dietaryPreferenceLabel(dietaryPreference),
+                          (value) => setModalState(
+                            () => dietaryPreference = normalizeDietaryPreference(
+                              value,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: cs.outlineVariant.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.tertiary.withValues(
+                                        alpha: 0.16,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(
+                                      Icons.healing_outlined,
+                                      color: AppTheme.tertiary,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Injuries / Limitations',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          'We skip exercises that mention these.',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: injuryController,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                minLines: 1,
+                                maxLines: 3,
+                                decoration: InputDecoration(
+                                  hintText:
+                                      'e.g. avoid jumping, sensitive left knee',
+                                  filled: true,
+                                  fillColor: cs.surfaceContainerHighest,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
@@ -1801,6 +2099,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               final userProvider = context.read<UserProvider>();
                               final workoutProvider = context
                                   .read<WorkoutProvider>();
+                              final dietPlanProvider = context
+                                  .read<DietPlanProvider>();
+                              final dietChanged =
+                                  dietaryPreference !=
+                                  normalizeDietaryPreference(
+                                    user.dietaryPreference,
+                                  );
                               final updatedProfile = user.copyWith(
                                 trainingLevel: trainingLevel,
                                 workoutLocation: workoutLocation,
@@ -1812,11 +2117,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 jointSensitivities: jointSensitivities.toList(
                                   growable: false,
                                 ),
+                                dietaryPreference: dietaryPreference,
+                                injuryNotes: injuryController.text.trim(),
                               );
                               await userProvider.updateProfile(updatedProfile);
                               await workoutProvider.refresh(
                                 profile: updatedProfile,
                               );
+                              if (dietChanged) {
+                                await dietPlanProvider.generate(updatedProfile);
+                              }
                               if (sheetContext.mounted) {
                                 Navigator.of(sheetContext).pop();
                               }
@@ -1851,6 +2161,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final weightController = TextEditingController(
       text: user.weight.toStringAsFixed(1),
     );
+    final targetWeightController = TextEditingController(
+      text: user.targetWeight > 0 ? user.targetWeight.toStringAsFixed(1) : '',
+    );
+    final injuryController = TextEditingController(text: user.injuryNotes);
+    const goalOptions = <String>[
+      'Lose Weight',
+      'Gain Muscle',
+      'Improve Stamina',
+      'Stay Active',
+    ];
+    var selectedGoal = goalOptions.contains(user.fitnessGoal)
+        ? user.fitnessGoal
+        : 'Stay Active';
 
     await showDialog<void>(
       context: context,
@@ -1900,7 +2223,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
 
-        return Dialog(
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) => Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 24),
           child: Container(
@@ -1994,6 +2318,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       decimal: true,
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  profileField(
+                    label: 'Target Weight (kg)',
+                    icon: Icons.flag_outlined,
+                    controller: targetWeightController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Primary Goal',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: goalOptions.map((goal) {
+                      final isSelected = goal == selectedGoal;
+                      return ChoiceChip(
+                        label: Text(goal),
+                        selected: isSelected,
+                        showCheckmark: false,
+                        labelStyle: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? cs.onSurface
+                              : cs.onSurfaceVariant,
+                        ),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppTheme.primaryContainer.withValues(alpha: 0.3)
+                              : cs.outlineVariant.withValues(alpha: 0.2),
+                        ),
+                        backgroundColor: cs.surfaceContainerHighest,
+                        selectedColor: AppTheme.primaryContainer.withValues(
+                          alpha: 0.14,
+                        ),
+                        onSelected: (_) =>
+                            setDialogState(() => selectedGoal = goal),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  profileField(
+                    label: 'Injuries / movements to avoid (optional)',
+                    icon: Icons.healing_outlined,
+                    controller: injuryController,
+                  ),
                   const SizedBox(height: 20),
                   Row(
                     children: [
@@ -2007,6 +2385,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Expanded(
                         child: FilledButton(
                           onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(
+                              dialogContext,
+                            );
+                            final userProvider = context.read<UserProvider>();
+                            final dietPlanProvider = context
+                                .read<DietPlanProvider>();
+                            final workoutProvider = context
+                                .read<WorkoutProvider>();
+                            final navigator = Navigator.of(dialogContext);
+
+                            final goalChanged = selectedGoal != user.fitnessGoal;
+                            final newWeight =
+                                double.tryParse(weightController.text.trim()) ??
+                                user.weight;
+                            final weightChanged = newWeight != user.weight;
+                            final newTargetWeight =
+                                double.tryParse(
+                                  targetWeightController.text.trim(),
+                                ) ??
+                                user.targetWeight;
+                            final newHeight =
+                                double.tryParse(heightController.text.trim()) ??
+                                user.height;
+                            final targetChanged =
+                                newTargetWeight != user.targetWeight;
+                            // Re-baseline goal progress from "now" whenever the
+                            // goal or target shifts, or if no baseline exists.
+                            final newStartWeight =
+                                (goalChanged ||
+                                    targetChanged ||
+                                    user.startWeight <= 0)
+                                ? newWeight
+                                : user.startWeight;
+
                             final updated = user.copyWith(
                               name: nameController.text.trim().isEmpty
                                   ? user.name
@@ -2014,22 +2426,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               age:
                                   int.tryParse(ageController.text.trim()) ??
                                   user.age,
-                              height:
-                                  double.tryParse(
-                                    heightController.text.trim(),
-                                  ) ??
-                                  user.height,
-                              weight:
-                                  double.tryParse(
-                                    weightController.text.trim(),
-                                  ) ??
-                                  user.weight,
+                              height: newHeight,
+                              weight: newWeight,
+                              targetWeight: newTargetWeight,
+                              startWeight: newStartWeight,
+                              fitnessGoal: selectedGoal,
+                              injuryNotes: injuryController.text.trim(),
                             );
-                            await context.read<UserProvider>().updateProfile(
-                              updated,
-                            );
-                            if (dialogContext.mounted) {
-                              Navigator.of(dialogContext).pop();
+                            await userProvider.updateProfile(updated);
+
+                            // Weight, height and goal all change calorie
+                            // targets and exercise selection, so regenerate
+                            // both plans whenever the basics shift.
+                            final shouldRebuild =
+                                goalChanged ||
+                                weightChanged ||
+                                newHeight != user.height ||
+                                injuryController.text.trim() !=
+                                    user.injuryNotes;
+                            if (shouldRebuild) {
+                              await workoutProvider.refresh(profile: updated);
+                              await dietPlanProvider.generate(updated);
+                            }
+
+                            if (navigator.mounted) {
+                              navigator.pop();
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Profile updated. Your plans were refreshed.',
+                                  ),
+                                ),
+                              );
                             }
                           },
                           child: const Text('Save'),
@@ -2040,6 +2468,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
+          ),
           ),
         );
       },

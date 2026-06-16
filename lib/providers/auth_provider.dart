@@ -41,6 +41,10 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _authService.sendPasswordResetEmail(email);
+  }
+
   // ── Google Sign-In ────────────────────────────────────────────────────────
 
   /// Returns null if the user cancelled the Google account picker.

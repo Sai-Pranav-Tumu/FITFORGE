@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/user_provider.dart';
+import 'services/analytics_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/diet_plan/diet_plan_screen.dart';
@@ -37,6 +38,7 @@ class _FitForgeAppState extends State<FitForgeApp> {
 
     return GoRouter(
       initialLocation: '/splash',
+      observers: [AnalyticsService.instance.navigatorObserver],
       refreshListenable: Listenable.merge([authProvider, userProvider]),
       redirect: (context, state) {
         if (authProvider.isLoading ||

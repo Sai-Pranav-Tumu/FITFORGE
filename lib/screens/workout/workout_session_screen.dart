@@ -1,13 +1,15 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/user_model.dart' show workoutDateKey;
 import '../../models/workout_plan.dart';
 import '../../providers/user_provider.dart';
+import '../../providers/workout_log_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/exercise_media.dart';
 
 class WorkoutSessionResult {
   final bool completedWorkout;
@@ -50,8 +52,11 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   int? _restSecondsRemaining;
   int _restTotalSeconds = 0;
   int? _nextExerciseIndexAfterRest;
+  bool _restIsBetweenCycles = false;
   bool _isRunning = true;
   bool _completingWorkout = false;
+  int? _logReps;
+  double? _logWeight;
 
   WorkoutExercise get _currentExercise => widget.plan.exercises[_exerciseIndex];
   WorkoutExercise get _upcomingExercise =>
@@ -88,11 +93,15 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
     if (resetCycle) {
       _exerciseCycle = 1;
+      // New exercise: clear any per-exercise logged reps/weight defaults.
+      _logReps = null;
+      _logWeight = null;
     }
 
     _restSecondsRemaining = null;
     _restTotalSeconds = 0;
     _nextExerciseIndexAfterRest = null;
+    _restIsBetweenCycles = false;
     _countdownSeconds =
         _currentExercise.targetDurationSeconds ??
         _extractCountdownSeconds(_currentExercise.prescription);
@@ -167,25 +176,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     if (!mounted) return;
 
     if (_hasMoreCyclesInExercise) {
-      setState(() {
-        _exerciseCycle++;
-        _countdownSeconds =
-            _currentExercise.targetDurationSeconds ??
-            _extractCountdownSeconds(_currentExercise.prescription);
-        _elapsedSeconds = 0;
-        _isRunning = true;
-      });
-      _startTicker();
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              '${_cycleLabel.toUpperCase()} $_exerciseCycle of $_totalCycles started.',
-            ),
-            duration: const Duration(milliseconds: 1400),
-          ),
-        );
+      _beginRestBeforeNextCycle();
       return;
     }
 
@@ -211,8 +202,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
 
     if (_hasMoreCyclesInExercise) {
-      setState(() => _exerciseCycle++);
-      _configureCurrentExercise(resetElapsed: true);
+      _beginRestBeforeNextCycle();
       return;
     }
 
@@ -267,6 +257,38 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     }
   }
 
+  void _beginRestBeforeNextCycle() {
+    final restSeconds = _recommendedRestSeconds(_currentExercise);
+    if (restSeconds <= 0) {
+      setState(() => _exerciseCycle++);
+      _configureCurrentExercise(resetElapsed: true);
+      return;
+    }
+
+    _timer?.cancel();
+    setState(() {
+      _nextExerciseIndexAfterRest = _exerciseIndex;
+      _restIsBetweenCycles = true;
+      _restTotalSeconds = restSeconds;
+      _restSecondsRemaining = restSeconds;
+      _countdownSeconds = null;
+      _elapsedSeconds = 0;
+      _isRunning = true;
+    });
+    _startTicker();
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Rest $restSeconds seconds before ${_cycleLabel.toLowerCase()} ${_exerciseCycle + 1} of $_totalCycles.',
+          ),
+          duration: const Duration(milliseconds: 1600),
+        ),
+      );
+  }
+
   void _beginRestBeforeNextExercise() {
     if (_exerciseIndex >= widget.plan.exercises.length - 1) {
       unawaited(_completeWorkout());
@@ -305,6 +327,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   }
 
   void _advanceAfterRest() {
+    if (_restIsBetweenCycles) {
+      setState(() => _exerciseCycle++);
+      _configureCurrentExercise(resetElapsed: true);
+      return;
+    }
+
     final nextExerciseIndex = _nextExerciseIndexAfterRest;
     if (nextExerciseIndex == null) {
       return;
@@ -363,10 +391,208 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         : [exercise.cue];
   }
 
+  String _formatWeight(double kg) {
+    if (kg <= 0) return 'bodyweight';
+    final rounded = (kg * 10).round() / 10;
+    return rounded % 1 == 0 ? '${rounded.toInt()}kg' : '${rounded}kg';
+  }
+
+  void _logCurrentSet(int reps, double weightKg) {
+    context.read<WorkoutLogProvider>().logSet(
+      exerciseName: _currentExercise.name,
+      date: widget.sessionDate,
+      setNumber: _exerciseCycle,
+      reps: reps,
+      weightKg: weightKg,
+    );
+    setState(() {
+      _logReps = reps;
+      _logWeight = weightKg;
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Logged ${_cycleLabel.toLowerCase()} $_exerciseCycle: '
+            '$reps reps @ ${_formatWeight(weightKg)}.',
+          ),
+          duration: const Duration(milliseconds: 1400),
+        ),
+      );
+  }
+
+  Widget _buildSetLogPanel(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final logProvider = context.watch<WorkoutLogProvider>();
+    final exercise = _currentExercise;
+    final todayKey = workoutDateKey(widget.sessionDate);
+    final last = logProvider.lastSessionFor(exercise.name, todayKey: todayKey);
+    final bestWeight = logProvider.bestWeightFor(exercise.name);
+
+    final defaultReps =
+        _logReps ??
+        exercise.targetRepCount ??
+        (last.isNotEmpty ? last.first.reps : 10);
+    final defaultWeight =
+        _logWeight ?? (last.isNotEmpty ? last.first.weightKg : 0.0);
+
+    String hint;
+    if (last.isNotEmpty) {
+      final l = last.first;
+      final base =
+          'Last time: ${last.length}×${l.reps} @ ${_formatWeight(l.weightKg)}';
+      hint = l.weightKg > 0
+          ? '$base · try ${_formatWeight(l.weightKg + 2.5)} for progressive overload'
+          : '$base · add a rep or two this time';
+    } else {
+      hint = 'Log your sets to track progress and get overload suggestions.';
+    }
+
+    Widget stepper({
+      required IconData icon,
+      required String label,
+      required String value,
+      required VoidCallback onMinus,
+      required VoidCallback onPlus,
+    }) {
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                _StepButton(icon: Icons.remove, onTap: onMinus),
+                Expanded(
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                _StepButton(icon: Icons.add, onTap: onPlus),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.80),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.fitness_center_rounded,
+                size: 18,
+                color: AppTheme.primaryContainer,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'LOG ${_cycleLabel.toUpperCase()} $_exerciseCycle',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                ),
+              ),
+              const Spacer(),
+              if (bestWeight > 0)
+                Text(
+                  'PR ${_formatWeight(bestWeight)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            hint,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.3,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              stepper(
+                icon: Icons.repeat_rounded,
+                label: 'REPS',
+                value: '$defaultReps',
+                onMinus: () => setState(
+                  () => _logReps = (defaultReps - 1).clamp(1, 100),
+                ),
+                onPlus: () => setState(
+                  () => _logReps = (defaultReps + 1).clamp(1, 100),
+                ),
+              ),
+              const SizedBox(width: 12),
+              stepper(
+                icon: Icons.monitor_weight_outlined,
+                label: 'WEIGHT',
+                value: _formatWeight(defaultWeight),
+                onMinus: () => setState(
+                  () => _logWeight = (defaultWeight - 2.5).clamp(0.0, 500.0),
+                ),
+                onPlus: () => setState(
+                  () => _logWeight = (defaultWeight + 2.5).clamp(0.0, 500.0),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _logCurrentSet(defaultReps, defaultWeight),
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: Text('Log ${_cycleLabel.toLowerCase()} $_exerciseCycle'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<String> _restGuideSteps() {
+    final upNext = _restIsBetweenCycles
+        ? 'Up next: ${_cycleLabel.toLowerCase()} ${_exerciseCycle + 1} of $_totalCycles — ${_upcomingExercise.name}.'
+        : 'Up next: ${_upcomingExercise.name} for ${_upcomingExercise.prescription}.';
     return <String>[
       'Let your breathing settle and shake tension out of your arms and legs.',
-      'Up next: ${_upcomingExercise.name} for ${_upcomingExercise.prescription}.',
+      upNext,
       _upcomingExercise.cue.isNotEmpty
           ? _upcomingExercise.cue
           : 'Tap skip rest as soon as you feel ready to move again.',
@@ -409,10 +635,20 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
           0,
           (sum, exercise) => sum + exercise.cycleCount.clamp(1, 99).toInt(),
         );
-    final completed =
-        completedCyclesBeforeCurrent +
-        (_isResting ? _totalCycles : (_exerciseCycle - 1));
-    final inFlight = _isResting ? 0 : 1;
+    final int completedWithinCurrent;
+    final int inFlight;
+    if (_isResting) {
+      // During a set rest we have finished _exerciseCycle sets; during a rest
+      // before the next exercise the whole exercise is done.
+      completedWithinCurrent = _restIsBetweenCycles
+          ? _exerciseCycle
+          : _totalCycles;
+      inFlight = 0;
+    } else {
+      completedWithinCurrent = _exerciseCycle - 1;
+      inFlight = 1;
+    }
+    final completed = completedCyclesBeforeCurrent + completedWithinCurrent;
     return ((completed + inFlight) / totalCycles).clamp(0.0, 1.0);
   }
 
@@ -436,7 +672,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         : (_isCountdownMode ? 'TIME LEFT' : 'ELAPSED');
     final sessionProgress = _sessionProgress();
     final cycleTitle = _isResting
-        ? 'EX ${(_nextExerciseIndexAfterRest ?? _exerciseIndex) + 1}/${widget.plan.exercises.length}'
+        ? (_restIsBetweenCycles
+              ? '${_cycleLabel.toUpperCase()} ${(_exerciseCycle + 1).clamp(1, _totalCycles)}/$_totalCycles'
+              : 'EX ${(_nextExerciseIndexAfterRest ?? _exerciseIndex) + 1}/${widget.plan.exercises.length}')
         : '${_cycleLabel.toUpperCase()} $_exerciseCycle/$_totalCycles';
     final canAdvanceWithinExercise = !_isResting && _hasMoreCyclesInExercise;
     final nextButtonLabel = _isResting
@@ -458,8 +696,10 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     final hintText = _focusHint(displayExercise);
     final guideTitle = _isResting ? 'UP NEXT GUIDE' : 'EXECUTION GUIDE';
     final restPreview = _isResting
-        ? 'Skip early if you are ready for the next exercise.'
-        : 'Rest after this exercise: ${_recommendedRestSeconds(_currentExercise)} sec';
+        ? (_restIsBetweenCycles
+              ? 'Skip early if you are ready for your next set.'
+              : 'Skip early if you are ready for the next exercise.')
+        : 'Rest between sets: ${_recommendedRestSeconds(_currentExercise)} sec';
 
     return Scaffold(
       backgroundColor: isDark
@@ -498,7 +738,9 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 _isResting
-                                    ? 'Recover before exercise ${(_nextExerciseIndexAfterRest ?? _exerciseIndex) + 1} of ${widget.plan.exercises.length}'
+                                    ? (_restIsBetweenCycles
+                                          ? 'Recover before ${_cycleLabel.toLowerCase()} ${_exerciseCycle + 1} of $_totalCycles'
+                                          : 'Recover before exercise ${(_nextExerciseIndexAfterRest ?? _exerciseIndex) + 1} of ${widget.plan.exercises.length}')
                                     : 'Exercise ${_exerciseIndex + 1} of ${widget.plan.exercises.length}',
                                 style: TextStyle(
                                   color: colorScheme.onSurfaceVariant,
@@ -681,6 +923,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
                         ],
                       ),
                     ),
+                    if (!_isResting &&
+                        !widget.plan.isRestDay &&
+                        _currentExercise.targetDurationSeconds == null) ...[
+                      const SizedBox(height: 12),
+                      _buildSetLogPanel(context),
+                    ],
                     const SizedBox(height: 18),
                     Container(
                       width: double.infinity,
@@ -822,6 +1070,30 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   }
 }
 
+class _StepButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _StepButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerHighest,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, size: 18, color: colorScheme.onSurface),
+        ),
+      ),
+    );
+  }
+}
+
 class _HeroImage extends StatelessWidget {
   final List<String> frameAssets;
   final String source;
@@ -838,17 +1110,12 @@ class _HeroImage extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return source == 'file'
-        ? Image.file(
-            File(frameAssets.first),
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-          )
-        : Image.asset(
-            frameAssets.first,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-          );
+    // Single frame (e.g. an animated GIF) — render directly; GIFs auto-animate.
+    return ExerciseMedia(
+      path: frameAssets.first,
+      source: source,
+      fit: BoxFit.contain,
+    );
   }
 }
 
@@ -1001,23 +1268,13 @@ class _ExerciseFrameLoopState extends State<_ExerciseFrameLoop> {
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
-      child: widget.source == 'file'
-          ? Image.file(
-              File(widget.frameAssets[_frameIndex]),
-              key: ValueKey<String>(widget.frameAssets[_frameIndex]),
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              errorBuilder: (_, _, _) =>
-                  const _ExercisePreviewFallbackContent(),
-            )
-          : Image.asset(
-              widget.frameAssets[_frameIndex],
-              key: ValueKey<String>(widget.frameAssets[_frameIndex]),
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              errorBuilder: (_, _, _) =>
-                  const _ExercisePreviewFallbackContent(),
-            ),
+      child: ExerciseMedia(
+        key: ValueKey<String>(widget.frameAssets[_frameIndex]),
+        path: widget.frameAssets[_frameIndex],
+        source: widget.source,
+        fit: BoxFit.contain,
+        fallbackBuilder: (_) => const _ExercisePreviewFallbackContent(),
+      ),
     );
   }
 }

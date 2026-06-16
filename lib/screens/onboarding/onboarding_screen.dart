@@ -5,6 +5,7 @@ import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dietary_preferences.dart';
 import '../../widgets/dark_mode_toggle.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -17,9 +18,11 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _injuryController = TextEditingController();
   late final FixedExtentScrollController _ageController;
   late final FixedExtentScrollController _heightController;
   late final FixedExtentScrollController _weightController;
+  late final FixedExtentScrollController _targetWeightController;
 
   int _currentIndex = 0;
   bool _isSaving = false;
@@ -28,6 +31,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _age = 25;
   double _height = 170;
   double _weight = 70;
+  double _targetWeight = 70;
+  String _dietaryPreference = DietaryPreferenceCodes.mixed;
   String? _occupation;
   String? _sittingHours;
   String? _fitnessGoal;
@@ -41,7 +46,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   };
   Set<String> _jointSensitivities = <String>{UserModel.defaultJointSensitivity};
 
-  static const int _totalQuestions = 15;
+  static const int _totalQuestions = 18;
 
   @override
   void initState() {
@@ -52,6 +57,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
     _weightController = FixedExtentScrollController(
       initialItem: _weight.toInt() - 30,
+    );
+    _targetWeightController = FixedExtentScrollController(
+      initialItem: _targetWeight.toInt() - 30,
     );
   }
 
@@ -109,6 +117,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         fitnessGoal: _fitnessGoal!,
         workoutDays: _workoutDays!,
         height: _height,
+        targetWeight: _targetWeight,
+        dietaryPreference: _dietaryPreference,
+        injuryNotes: _injuryController.text.trim(),
         trainingLevel: _trainingLevel ?? 'Beginner',
         workoutLocation: _workoutLocation ?? 'Home',
         availableEquipment: _availableEquipment ?? 'Bodyweight',
@@ -138,9 +149,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
+    _injuryController.dispose();
     _ageController.dispose();
     _heightController.dispose();
     _weightController.dispose();
+    _targetWeightController.dispose();
     super.dispose();
   }
 
@@ -250,6 +263,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       onChanged: (value) =>
                           setState(() => _weight = value.toDouble()),
                     ),
+                    _buildMetricWheelQuestion(
+                      context,
+                      title: 'What is your target weight?',
+                      subtitle:
+                          'Your goal weight tunes how aggressive your calorie target and progress pacing should be.',
+                      value: _targetWeight.toInt(),
+                      unit: 'kg',
+                      min: 30,
+                      max: 200,
+                      controller: _targetWeightController,
+                      onChanged: (value) =>
+                          setState(() => _targetWeight = value.toDouble()),
+                    ),
                     _buildChoiceQuestion(
                       context,
                       title: 'What describes your daily occupation?',
@@ -310,6 +336,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                       onSelected: (value) =>
                           setState(() => _fitnessGoal = value),
+                    ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'How do you prefer to eat?',
+                      subtitle:
+                          'This shapes your weekly diet plan so meal suggestions match what you actually eat.',
+                      selectedValue: dietaryPreferenceLabel(_dietaryPreference),
+                      options: const [
+                        _ChoiceOption(
+                          'Vegetarian',
+                          '🥗',
+                          subtitle: 'Only vegetarian and plant-based foods',
+                        ),
+                        _ChoiceOption(
+                          'Veg + Non-Veg',
+                          '🍽',
+                          subtitle: 'A balanced mix of veg and non-veg meals',
+                        ),
+                        _ChoiceOption(
+                          'Only Non-Veg',
+                          '🍗',
+                          subtitle: 'Meals can center on non-vegetarian foods',
+                        ),
+                      ],
+                      onSelected: (value) => setState(
+                        () => _dietaryPreference = normalizeDietaryPreference(
+                          value,
+                        ),
+                      ),
                     ),
                     _buildChoiceQuestion(
                       context,
@@ -442,6 +497,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         );
                       }),
                     ),
+                    _buildInjuryQuestion(context),
                     _buildWorkoutDaysQuestion(context),
                   ],
                 ),
@@ -575,6 +631,60 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   const SizedBox(height: 20),
                   Text(
                     'We will show this on the workout page, greetings, and progress areas.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildInjuryQuestion(BuildContext context) {
+    return _buildQuestionScaffold(
+      context: context,
+      title: 'Anything we should train around?',
+      subtitle:
+          'Optional. Mention any injuries, surgeries, or movements that cause pain so we can avoid them. Leave blank if none.',
+      canContinue: true,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: TextField(
+                      controller: _injuryController,
+                      textCapitalization: TextCapitalization.sentences,
+                      minLines: 2,
+                      maxLines: 4,
+                      scrollPadding: const EdgeInsets.only(bottom: 140),
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. avoid jumping, sensitive right wrist',
+                        prefixIcon: Icon(Icons.healing_outlined),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'We use this to skip exercises that mention these movements, on top of the joint-care areas you picked.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

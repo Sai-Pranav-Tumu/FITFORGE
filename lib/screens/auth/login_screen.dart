@@ -53,6 +53,44 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _sendPasswordReset() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      setState(
+        () => _errorMessage =
+            'Enter your email address above first, then tap “Forgot password?” to get a reset link.',
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await context.read<AuthProvider>().sendPasswordResetEmail(email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'If an account exists for $email, a password reset link is on its way. Check your inbox and spam.',
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _errorMessage = formatAuthError(e, flow: AuthFlow.signIn),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   void dispose() {
     _emailCtrl.dispose();
@@ -299,7 +337,24 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 40),
+                            const SizedBox(height: 12),
+
+                            // ── Forgot password ──────────────────────────
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: GestureDetector(
+                                onTap: _isLoading ? null : _sendPasswordReset,
+                                child: Text(
+                                  'Forgot password?',
+                                  style: TextStyle(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
 
                             // ── Login Button ──────────────────────────────
                             GestureDetector(

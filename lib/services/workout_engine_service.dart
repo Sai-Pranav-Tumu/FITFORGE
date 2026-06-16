@@ -42,9 +42,86 @@ class WorkoutEngineService {
           if (!_jointCompatible(profile.jointSensitivities, exercise)) {
             return false;
           }
+          if (!_injuryCompatible(profile.injuryNotes, exercise)) {
+            return false;
+          }
           return true;
         })
         .toList(growable: false);
+  }
+
+  /// Filters out exercises that touch a body part / movement the user flagged
+  /// in their free-text injury notes (e.g. "avoid jumping, sore right wrist").
+  static bool _injuryCompatible(
+    String injuryNotes,
+    ExerciseDefinition exercise,
+  ) {
+    final notes = injuryNotes.toLowerCase().trim();
+    if (notes.isEmpty) {
+      return true;
+    }
+
+    final haystack =
+        '${exercise.name} '
+                '${exercise.instructions.join(' ')} '
+                '${exercise.primaryMuscles.join(' ')} '
+                '${exercise.secondaryMuscles.join(' ')} '
+                '${exercise.equipment} ${exercise.category}'
+            .toLowerCase();
+
+    const stopWords = <String>{
+      'avoid',
+      'pain',
+      'painful',
+      'injury',
+      'injured',
+      'injuries',
+      'hurt',
+      'hurts',
+      'sore',
+      'sensitive',
+      'careful',
+      'left',
+      'right',
+      'side',
+      'with',
+      'that',
+      'this',
+      'from',
+      'some',
+      'have',
+      'when',
+      'doing',
+      'dont',
+      'cannot',
+      'none',
+      'mild',
+      'past',
+      'recent',
+      'after',
+      'surgery',
+      'please',
+      'really',
+      'still',
+      'movement',
+      'movements',
+      'exercise',
+      'exercises',
+    };
+    const shortBodyParts = <String>{'hip', 'arm', 'leg', 'rib', 'toe', 'jaw'};
+
+    final tokens = notes
+        .split(RegExp(r'[^a-z]+'))
+        .where((token) => token.isNotEmpty);
+    for (final token in tokens) {
+      final isMeaningful =
+          (token.length >= 4 && !stopWords.contains(token)) ||
+          shortBodyParts.contains(token);
+      if (isMeaningful && haystack.contains(token)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static List<WorkoutDayPlan> _buildWeeklyPlan(
@@ -794,11 +871,86 @@ class WorkoutEngineService {
     score += _locationScore(profile, exercise);
     score += _sittingScore(profile, exercise);
     score += _goalScore(profile, exercise);
+    score += _bodyCompositionScore(profile, exercise);
+    score += _ageScore(profile, exercise);
 
     if (globallyUnused) {
       score += 0.75;
     }
 
+    return score;
+  }
+
+  /// Nudges selection based on BMI and the direction the user wants their
+  /// weight to move (current vs. target weight, plus their stated goal).
+  static double _bodyCompositionScore(
+    UserModel profile,
+    ExerciseDefinition exercise,
+  ) {
+    final bmi = profile.bmi;
+    if (bmi <= 0) {
+      return 0.0;
+    }
+
+    var score = 0.0;
+    final text = _exerciseText(exercise);
+    final category = _normalize(exercise.category);
+    final mechanic = _normalize(exercise.mechanic);
+    final highImpact =
+        text.contains('jump') ||
+        text.contains('plyo') ||
+        text.contains('sprint') ||
+        text.contains('hop') ||
+        text.contains('bound');
+
+    final wantsLoss =
+        profile.fitnessGoal == 'Lose Weight' ||
+        (profile.hasTargetWeight &&
+            profile.targetWeight < profile.weight - 1.0);
+    final wantsGain =
+        profile.fitnessGoal == 'Gain Muscle' ||
+        (profile.hasTargetWeight &&
+            profile.targetWeight > profile.weight + 1.0);
+
+    if (bmi >= 30) {
+      // Protect joints under higher load: steer away from high-impact work
+      // and toward low-impact conditioning and big compound strength lifts.
+      if (highImpact) score -= 3.0;
+      if (category == 'cardio' && !highImpact) score += 1.5;
+      if (mechanic == 'compound') score += 1.0;
+    } else if (bmi >= 25) {
+      if (highImpact) score -= 1.0;
+    } else if (bmi < 18.5) {
+      // Underweight: prioritise strength, ease back on heavy cardio volume.
+      if (mechanic == 'compound') score += 1.5;
+      if (category == 'cardio') score -= 1.0;
+    }
+
+    if (wantsLoss) {
+      if (category == 'cardio' && !highImpact) score += 1.2;
+      if (mechanic == 'compound') score += 0.8;
+    }
+    if (wantsGain) {
+      if (mechanic == 'compound') score += 1.2;
+      if (category == 'cardio') score -= 0.6;
+    }
+
+    return score;
+  }
+
+  /// Older trainees get a gentle push toward low-impact work and mobility.
+  static double _ageScore(UserModel profile, ExerciseDefinition exercise) {
+    if (profile.age < 50) {
+      return 0.0;
+    }
+    final text = _exerciseText(exercise);
+    final highImpact =
+        text.contains('jump') ||
+        text.contains('sprint') ||
+        text.contains('plyo');
+    var score = 0.0;
+    if (highImpact) score -= 2.0;
+    if (_isMobilityExercise(exercise)) score += 1.0;
     return score;
   }
 
@@ -1056,6 +1208,9 @@ class WorkoutEngineService {
     if (!_jointCompatible(profile.jointSensitivities, exercise)) {
       score -= 5.0;
     }
+    if (!_injuryCompatible(profile.injuryNotes, exercise)) {
+      score -= 6.0;
+    }
 
     return score;
   }
@@ -1068,7 +1223,15 @@ class WorkoutEngineService {
     final muscles = exercise.primaryMuscles.isEmpty
         ? exercise.secondaryMuscles
         : exercise.primaryMuscles;
-    final animationFrames = exercise.images.take(2).toList(growable: false);
+    // Prefer an animated GIF when available; otherwise fall back to the
+    // two-still-frame flip from the free-exercise-db image set.
+    final hasGif = exercise.hasGif;
+    final animationFrames = hasGif
+        ? <String>[exercise.gif]
+        : exercise.images.take(2).toList(growable: false);
+    final animationType = hasGif
+        ? 'gif'
+        : (animationFrames.isNotEmpty ? 'frames' : 'placeholder');
 
     return WorkoutExercise(
       name: exercise.name.trim(),
@@ -1085,7 +1248,7 @@ class WorkoutEngineService {
           ? exercise.instructions.first
           : 'Move with control and steady breathing.',
       animationAsset: animationFrames.isNotEmpty ? animationFrames.first : '',
-      animationType: animationFrames.isNotEmpty ? 'frames' : 'placeholder',
+      animationType: animationType,
       animationFrames: animationFrames,
       animationFramesSource: exercise.imageSource,
       primaryMuscles: muscles
@@ -1163,7 +1326,9 @@ class WorkoutEngineService {
     if (_normalize(profile.trainingLevel) == 'advanced' && minutes >= 45) {
       count += 1;
     }
-    return count.clamp(5, 10).toInt();
+    // Adaptive difficulty: post-workout feedback shifts weekly volume up/down.
+    count += profile.intensityAdjustment.clamp(-2, 2);
+    return count.clamp(4, 11).toInt();
   }
 
   static int _recoveryExerciseTargetCount(UserModel profile) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
+import '../services/analytics_service.dart';
 import '../services/database_service.dart';
 
 class UserProvider extends ChangeNotifier {
@@ -28,6 +29,7 @@ class UserProvider extends ChangeNotifier {
 
     _activeUid = user.uid;
     _isLoading = true;
+    AnalyticsService.instance.setUser(user.uid);
     notifyListeners();
     Future.microtask(() => fetchUserProfile(user.uid));
   }
@@ -91,6 +93,9 @@ class UserProvider extends ChangeNotifier {
     required String fitnessGoal,
     required int workoutDays,
     double height = 170.0,
+    double targetWeight = 0.0,
+    String dietaryPreference = 'mixed',
+    String injuryNotes = '',
     String trainingLevel = 'Beginner',
     String workoutLocation = 'Home',
     String availableEquipment = 'Bodyweight',
@@ -113,6 +118,10 @@ class UserProvider extends ChangeNotifier {
       fitnessGoal: fitnessGoal,
       workoutDays: workoutDays,
       height: height,
+      targetWeight: targetWeight,
+      startWeight: weight,
+      dietaryPreference: dietaryPreference,
+      injuryNotes: injuryNotes,
       trainingLevel: trainingLevel,
       workoutLocation: workoutLocation,
       availableEquipment: availableEquipment,

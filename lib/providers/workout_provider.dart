@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/user_model.dart';
 import '../models/workout_plan.dart';
+import '../services/analytics_service.dart';
 import '../services/exercise_library_service.dart';
 import '../services/workout_engine_service.dart';
 
@@ -37,8 +38,10 @@ class WorkoutProvider extends ChangeNotifier {
   String get downloadPhase => _library.downloadPhase;
   String get downloadPhaseMessage => _library.downloadPhaseMessage;
 
-  Future<void> acceptExerciseLibraryDownload() =>
-      _library.acceptDownloadPrompt();
+  Future<void> acceptExerciseLibraryDownload() {
+    AnalyticsService.instance.logLibraryDownloadStarted();
+    return _library.acceptDownloadPrompt();
+  }
 
   Future<void> declineExerciseLibraryDownload() =>
       _library.declineDownloadPrompt();
@@ -172,6 +175,13 @@ class WorkoutProvider extends ChangeNotifier {
       profile.jointSensitivities.join(','),
       profile.occupation,
       profile.sittingHours,
+      profile.weight.toStringAsFixed(1),
+      profile.height.toStringAsFixed(1),
+      profile.targetWeight.toStringAsFixed(1),
+      profile.age.toString(),
+      profile.gender,
+      profile.injuryNotes,
+      profile.intensityAdjustment.toString(),
     ].join('|');
   }
 

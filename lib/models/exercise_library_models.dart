@@ -57,6 +57,7 @@ class ExerciseDefinition {
     required this.instructions,
     required this.category,
     required this.images,
+    this.gif = '',
     this.imageSource = 'asset',
   });
 
@@ -71,9 +72,14 @@ class ExerciseDefinition {
   final List<String> instructions;
   final String category;
   final List<String> images;
+
+  /// Path/URL to an animated GIF demonstrating the movement, when available.
+  /// Takes visual priority over [images] for previews.
+  final String gif;
   final String imageSource;
 
   bool get hasImages => images.isNotEmpty;
+  bool get hasGif => gif.isNotEmpty;
 
   factory ExerciseDefinition.fromJson(Map<String, dynamic> json) {
     return ExerciseDefinition(
@@ -88,6 +94,7 @@ class ExerciseDefinition {
       instructions: _readStringList(json['instructions']),
       category: json['category'] as String? ?? '',
       images: _readStringList(json['images']),
+      gif: json['gif'] as String? ?? '',
       imageSource: json['imageSource'] as String? ?? 'asset',
     );
   }
@@ -105,6 +112,7 @@ class ExerciseDefinition {
       'instructions': instructions,
       'category': category,
       'images': images,
+      'gif': gif,
       'imageSource': imageSource,
     };
   }
@@ -121,6 +129,7 @@ class ExerciseDefinition {
     List<String>? instructions,
     String? category,
     List<String>? images,
+    String? gif,
     String? imageSource,
   }) {
     return ExerciseDefinition(
@@ -135,6 +144,7 @@ class ExerciseDefinition {
       instructions: instructions ?? this.instructions,
       category: category ?? this.category,
       images: images ?? this.images,
+      gif: gif ?? this.gif,
       imageSource: imageSource ?? this.imageSource,
     );
   }
