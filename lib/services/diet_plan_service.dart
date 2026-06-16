@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/diet_plan_models.dart';
 import '../models/nutrition_models.dart';
 import '../models/user_model.dart';
+import '../utils/dietary_preferences.dart';
 import 'nutrition_service.dart';
 
 class DietPlanService {
@@ -18,10 +19,7 @@ class DietPlanService {
     await _nutrition.initialize();
 
     final tdee = TdeeEngine.calculate(user);
-    final allFoods = _filterFoodsByPreference(
-      await _nutrition.getAllFoodsForPlanning(),
-      user.dietaryPreference,
-    );
+    final allFoods = await _nutrition.getAllFoodsForPlanning();
     if (allFoods.isEmpty) {
       throw StateError('Food database is empty. Import nutrition data first.');
     }
@@ -32,6 +30,7 @@ class DietPlanService {
         foods: allFoods,
         tdee: tdee,
         seed: DateTime.now().millisecondsSinceEpoch,
+        dietaryPreference: normalizeDietaryPreference(user.dietaryPreference),
       ),
     );
 
@@ -50,60 +49,31 @@ class DietPlanService {
     required UserModel user,
   }) async {
     await _nutrition.initialize();
-    final allFoods = _filterFoodsByPreference(
-      await _nutrition.getAllFoodsForPlanning(),
+    final allFoods = await _nutrition.getAllFoodsForPlanning();
+    final budget = MealPlanBuilder._slotBudget(plan.tdee, slot);
+    final rng = math.Random(DateTime.now().microsecondsSinceEpoch);
+    final dietaryPreference = normalizeDietaryPreference(
       user.dietaryPreference,
     );
-    final budget = MealPlanBuilder.slotBudget(plan.tdee, slot);
-    final rng = math.Random(DateTime.now().microsecondsSinceEpoch);
 
     final usedIds = plan.days[dayIndex].meals
         .expand((meal) => meal.foods)
         .map((food) => food.foodId)
         .toSet();
-    final available = allFoods.where((food) => !usedIds.contains(food.id)).toList();
+    final available = allFoods
+        .where((food) => !usedIds.contains(food.id))
+        .toList();
 
-    return MealPlanBuilder.buildMeal(
+    return MealPlanBuilder._buildMeal(
       slot: slot,
       foods: available.isNotEmpty ? available : allFoods,
       budget: budget,
       rng: rng,
+      dietaryPreference: dietaryPreference,
+      dayIndex: dayIndex,
     );
   }
 }
-
-List<FoodItem> _filterFoodsByPreference(
-  List<FoodItem> foods,
-  String preference,
-) {
-  if (preference == 'any') return foods;
-
-  final filtered = foods.where((food) {
-    final name = food.foodName.toLowerCase();
-    final isNonVeg = _nonVegKeywords.any(name.contains);
-    if (preference == 'veg') {
-      return !isNonVeg;
-    }
-    return isNonVeg;
-  }).toList();
-
-  return filtered.isNotEmpty ? filtered : foods;
-}
-
-const List<String> _nonVegKeywords = <String>[
-  'chicken',
-  'mutton',
-  'fish',
-  'prawn',
-  'egg',
-  'beef',
-  'pork',
-  'meat',
-  'tuna',
-  'sardine',
-  'crab',
-  'liver',
-];
 
 List<PlannedDay> _buildWeekInIsolate(_IsolateArgs args) {
   final rng = math.Random(args.seed);
@@ -111,6 +81,7 @@ List<PlannedDay> _buildWeekInIsolate(_IsolateArgs args) {
     foods: args.foods,
     tdee: args.tdee,
     rng: rng,
+    dietaryPreference: args.dietaryPreference,
   );
 }
 
@@ -118,11 +89,13 @@ class _IsolateArgs {
   final List<FoodItem> foods;
   final TdeeResult tdee;
   final int seed;
+  final String dietaryPreference;
 
   const _IsolateArgs({
     required this.foods,
     required this.tdee,
     required this.seed,
+    required this.dietaryPreference,
   });
 }
 
@@ -164,8 +137,10 @@ class TdeeEngine {
     final protein = (weight * proteinPerKg).clamp(60.0, 250.0);
     final fatPct = goal.contains('lose') ? 0.25 : 0.28;
     final fat = (targetCalories * fatPct) / 9.0;
-    final carbsKcal =
-        (targetCalories - (protein * 4.0) - (fat * 9.0)).clamp(0.0, double.infinity);
+    final carbsKcal = (targetCalories - (protein * 4.0) - (fat * 9.0)).clamp(
+      0.0,
+      double.infinity,
+    );
     final carbs = carbsKcal / 4.0;
 
     return TdeeResult(
@@ -225,6 +200,7 @@ class MealPlanBuilder {
     required List<FoodItem> foods,
     required TdeeResult tdee,
     required math.Random rng,
+    required String dietaryPreference,
   }) {
     return List<PlannedDay>.generate(
       7,
@@ -233,6 +209,7 @@ class MealPlanBuilder {
         foods: foods,
         tdee: tdee,
         rng: rng,
+        dietaryPreference: dietaryPreference,
       ),
     );
   }
@@ -242,18 +219,23 @@ class MealPlanBuilder {
     required List<FoodItem> foods,
     required TdeeResult tdee,
     required math.Random rng,
+    required String dietaryPreference,
   }) {
     final shuffled = List<FoodItem>.from(foods)..shuffle(rng);
     final usedIds = <int>{};
     final meals = <PlannedMeal>[];
 
     for (final slot in _slotFractions.keys) {
-      final available = shuffled.where((food) => !usedIds.contains(food.id)).toList();
-      final meal = buildMeal(
+      final available = shuffled
+          .where((food) => !usedIds.contains(food.id))
+          .toList();
+      final meal = _buildMeal(
         slot: slot,
         foods: available.isNotEmpty ? available : shuffled,
-        budget: slotBudget(tdee, slot),
+        budget: _slotBudget(tdee, slot),
         rng: rng,
+        dietaryPreference: dietaryPreference,
+        dayIndex: dayIndex,
       );
       for (final food in meal.foods) {
         usedIds.add(food.foodId);
@@ -264,7 +246,7 @@ class MealPlanBuilder {
     return PlannedDay(dayIndex: dayIndex, meals: meals);
   }
 
-  static _MacroBudget slotBudget(TdeeResult tdee, String slot) {
+  static _MacroBudget _slotBudget(TdeeResult tdee, String slot) {
     final fraction = _slotFractions[slot] ?? 0.25;
     return _MacroBudget(
       calories: tdee.targetCalories * fraction,
@@ -274,21 +256,38 @@ class MealPlanBuilder {
     );
   }
 
-  static PlannedMeal buildMeal({
+  static PlannedMeal _buildMeal({
     required String slot,
     required List<FoodItem> foods,
     required _MacroBudget budget,
     required math.Random rng,
+    required String dietaryPreference,
+    required int dayIndex,
   }) {
     final chosen = <PlannedFood>[];
     var remaining = budget;
     final targetItems = slot == 'snack' ? 1 : _itemsForSlot(slot, rng);
+    final strategy = _strategyForMeal(
+      foods: foods,
+      dietaryPreference: dietaryPreference,
+      slot: slot,
+      dayIndex: dayIndex,
+      targetItems: targetItems,
+      rng: rng,
+    );
 
     for (var i = 0; i < targetItems && remaining.calories > 50; i++) {
-      final candidate = _pickBestFood(foods, remaining, chosen, rng);
+      final preferredPool = i < strategy.preferredItemCount
+          ? strategy.preferredFoods
+          : strategy.allowedFoods;
+      final candidate =
+          _pickBestFood(preferredPool, remaining, chosen, rng) ??
+          _pickBestFood(strategy.allowedFoods, remaining, chosen, rng);
       if (candidate == null) break;
 
-      final fillFraction = i == targetItems - 1 ? 0.9 : (0.4 + rng.nextDouble() * 0.2);
+      final fillFraction = i == targetItems - 1
+          ? 0.9
+          : (0.4 + rng.nextDouble() * 0.2);
       final calorieTarget = remaining.calories * fillFraction;
       final rawGrams = (calorieTarget / candidate.calories) * 100.0;
       final grams = _roundToPortionSize(rawGrams, slot, i).clamp(25.0, 400.0);
@@ -309,6 +308,73 @@ class MealPlanBuilder {
     }
 
     return PlannedMeal(slot: slot, foods: chosen);
+  }
+
+  static _MealSelectionStrategy _strategyForMeal({
+    required List<FoodItem> foods,
+    required String dietaryPreference,
+    required String slot,
+    required int dayIndex,
+    required int targetItems,
+    required math.Random rng,
+  }) {
+    final preference = normalizeDietaryPreference(dietaryPreference);
+    final vegetarianFoods = foods
+        .where((food) => !isNonVegFoodName(food.foodName))
+        .toList(growable: false);
+    final nonVegFoods = foods
+        .where((food) => isNonVegFoodName(food.foodName))
+        .toList(growable: false);
+
+    List<FoodItem> fallback(List<FoodItem> primary) =>
+        primary.isNotEmpty ? primary : foods;
+
+    if (preference == DietaryPreferenceCodes.vegetarian) {
+      final allowedFoods = fallback(vegetarianFoods);
+      return _MealSelectionStrategy(
+        allowedFoods: allowedFoods,
+        preferredFoods: allowedFoods,
+        preferredItemCount: targetItems,
+      );
+    }
+
+    if (preference == DietaryPreferenceCodes.nonVegOnly) {
+      final allowedFoods = fallback(nonVegFoods);
+      return _MealSelectionStrategy(
+        allowedFoods: allowedFoods,
+        preferredFoods: allowedFoods,
+        preferredItemCount: targetItems,
+      );
+    }
+
+    if (slot == 'breakfast' || slot == 'snack') {
+      final preferredFoods = fallback(vegetarianFoods);
+      return _MealSelectionStrategy(
+        allowedFoods: foods,
+        preferredFoods: preferredFoods,
+        preferredItemCount: targetItems,
+      );
+    }
+
+    final shouldIncludeNonVeg =
+        nonVegFoods.isNotEmpty &&
+        ((slot == 'lunch' && (dayIndex.isEven || rng.nextBool())) ||
+            (slot == 'dinner' && rng.nextDouble() < 0.45));
+
+    if (shouldIncludeNonVeg) {
+      return _MealSelectionStrategy(
+        allowedFoods: foods,
+        preferredFoods: nonVegFoods,
+        preferredItemCount: 1,
+      );
+    }
+
+    final preferredFoods = fallback(vegetarianFoods);
+    return _MealSelectionStrategy(
+      allowedFoods: foods,
+      preferredFoods: preferredFoods,
+      preferredItemCount: targetItems,
+    );
   }
 
   static FoodItem? _pickBestFood(
@@ -351,7 +417,10 @@ class MealPlanBuilder {
     final proteinMatch = 1.0 - (proteinRatio - remainingProteinRatio).abs();
     final densityScore = (food.nutrients['nutrition_density'] ?? 0) / 100.0;
     final calorieFit = food.calories <= remaining.calories ? 1.0 : 0.5;
-    final fiberBonus = ((food.nutrients['dietary_fiber'] ?? 0) / 15.0).clamp(0.0, 1.0);
+    final fiberBonus = ((food.nutrients['dietary_fiber'] ?? 0) / 15.0).clamp(
+      0.0,
+      1.0,
+    );
 
     return (proteinMatch * 0.45) +
         (densityScore * 0.25) +
@@ -400,4 +469,16 @@ class _MacroBudget {
       fat: math.max(0, fat - food.fat),
     );
   }
+}
+
+class _MealSelectionStrategy {
+  final List<FoodItem> allowedFoods;
+  final List<FoodItem> preferredFoods;
+  final int preferredItemCount;
+
+  const _MealSelectionStrategy({
+    required this.allowedFoods,
+    required this.preferredFoods,
+    required this.preferredItemCount,
+  });
 }

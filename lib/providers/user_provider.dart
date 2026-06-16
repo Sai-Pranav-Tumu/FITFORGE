@@ -135,6 +135,33 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> markWorkoutCompleted(DateTime date) async {
+    final currentProfile = _userProfile;
+    if (currentProfile == null) {
+      return false;
+    }
+
+    final completionKey = workoutDateKey(date);
+    final completedDates = currentProfile.workoutCompletionDates;
+    if (completedDates.contains(completionKey)) {
+      return false;
+    }
+
+    final updatedDates = List<String>.from(completedDates)
+      ..add(completionKey)
+      ..sort();
+
+    final updatedProfile = currentProfile.copyWith(
+      completedWorkoutDates: updatedDates,
+      streak: calculateWorkoutStreak(updatedDates),
+    );
+
+    await _dbService.saveUser(updatedProfile);
+    _userProfile = updatedProfile;
+    notifyListeners();
+    return true;
+  }
+
   void clearProfile() {
     _userProfile = null;
     _isLoading = false;

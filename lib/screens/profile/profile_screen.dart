@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -5,11 +7,13 @@ import 'package:provider/provider.dart';
 
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/diet_plan_provider.dart';
 import '../../providers/nutrition_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/workout_provider.dart';
 import '../../services/nutrition_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dietary_preferences.dart';
 import '../../widgets/auth_error_card.dart';
 import '../../widgets/dark_mode_toggle.dart';
 import '../../widgets/top_app_bar.dart';
@@ -129,7 +133,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Expanded(child: _buildStatCard(context, 'WORKOUTS', '24')),
+                  Expanded(
+                    child: _buildStatCard(
+                      context,
+                      'WORKOUTS',
+                      '${user?.completedWorkoutCount ?? 0}',
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildStatCard(
@@ -188,6 +198,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildBmiInsightCard(context, user),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -212,8 +227,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _dietaryPreferenceLabel(
-                              user?.dietaryPreference ?? 'any',
+                            dietaryPreferenceLabel(
+                              user?.dietaryPreference ??
+                                  DietaryPreferenceCodes.mixed,
                             ),
                             style: TextStyle(
                               color: colorScheme.onSurfaceVariant,
@@ -299,6 +315,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _buildMonthlyNutritionCard(context, colorScheme),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildContactUsCard(context),
             ),
             const SizedBox(height: 24),
             Padding(
@@ -461,11 +482,259 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildBmiInsightCard(BuildContext context, UserModel? user) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bmi = _bmiValue(user);
+    final status = _bmiStatus(bmi);
+    final healthyRange = _healthyWeightRange(user);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.surfaceContainerLow,
+            colorScheme.surfaceContainerHigh,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: status.color.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: status.color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.monitor_weight_outlined, color: status.color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'BMI INSIGHT',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Body mass index at a glance',
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 220,
+            child: _BmiGauge(bmi: bmi, status: status),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _smallChip(status.label),
+              _smallChip(
+                bmi > 0 ? 'BMI ${bmi.toStringAsFixed(1)}' : 'Add metrics',
+              ),
+              if (healthyRange != '--')
+                _smallChip('Healthy range $healthyRange'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            status.message,
+            style: TextStyle(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            healthyRange == '--'
+                ? 'Add your height and weight to unlock a clearer BMI explanation here.'
+                : 'Healthy BMI usually sits between 18.5 and 24.9. For your height, that maps to about $healthyRange.',
+            style: TextStyle(color: colorScheme.onSurfaceVariant, height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactUsCard(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryContainer.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.support_agent_rounded,
+              color: AppTheme.primaryContainer,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Contact Us',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'For support, questions, or feedback, reach us at:',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.mail_outline_rounded,
+                        size: 18,
+                        color: AppTheme.primaryContainer,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: SelectableText(
+                          'autoreflex.ai@gmail.com',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _bmiLabel(double weightKg, double heightCm) {
     if (weightKg <= 0 || heightCm <= 0) return '--';
     final heightM = heightCm / 100.0;
     final bmi = weightKg / (heightM * heightM);
     return bmi.toStringAsFixed(1);
+  }
+
+  double _bmiValue(UserModel? user) {
+    if (user == null || user.weight <= 0 || user.height <= 0) {
+      return 0;
+    }
+    final heightM = user.height / 100.0;
+    return user.weight / (heightM * heightM);
+  }
+
+  _BmiStatus _bmiStatus(double bmi) {
+    if (bmi <= 0) {
+      return const _BmiStatus(
+        label: 'Add Metrics',
+        color: AppTheme.primaryContainer,
+        message:
+            'BMI becomes easier to understand here once your height and weight are available.',
+      );
+    }
+    if (bmi < 18.5) {
+      return const _BmiStatus(
+        label: 'Underweight',
+        color: Color(0xFF4DA8FF),
+        message:
+            'You are below the typical healthy BMI range, so recovery and calorie support matter more.',
+      );
+    }
+    if (bmi < 25) {
+      return const _BmiStatus(
+        label: 'Healthy',
+        color: Color(0xFF1FAE6A),
+        message:
+            'You are in the typical healthy BMI range. Keep building strength and consistency.',
+      );
+    }
+    if (bmi < 30) {
+      return const _BmiStatus(
+        label: 'Overweight',
+        color: Color(0xFFF5A524),
+        message:
+            'You are above the healthy BMI range, so gradual fat loss and steady training will help most.',
+      );
+    }
+    return const _BmiStatus(
+      label: 'Obesity',
+      color: Color(0xFFE35D5D),
+      message:
+          'You are well above the healthy BMI range, so low-impact consistency and realistic nutrition targets are key.',
+    );
+  }
+
+  String _healthyWeightRange(UserModel? user) {
+    if (user == null || user.height <= 0) {
+      return '--';
+    }
+
+    final heightM = user.height / 100.0;
+    final minKg = 18.5 * heightM * heightM;
+    final maxKg = 24.9 * heightM * heightM;
+
+    if (user.preferredUnits == 'imperial') {
+      final minLb = minKg * 2.20462;
+      final maxLb = maxKg * 2.20462;
+      return '${minLb.toStringAsFixed(0)}-${maxLb.toStringAsFixed(0)} lb';
+    }
+
+    return '${minKg.toStringAsFixed(1)}-${maxKg.toStringAsFixed(1)} kg';
   }
 
   String _goalShortLabel(String goal) {
@@ -474,17 +743,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (goal == 'Gain Muscle') return 'Bulk';
     if (goal == 'Improve Stamina') return 'Endure';
     return 'Active';
-  }
-
-  String _dietaryPreferenceLabel(String preference) {
-    switch (preference) {
-      case 'veg':
-        return 'Vegetarian';
-      case 'nonveg':
-        return 'Non-Vegetarian';
-      default:
-        return 'No filter';
-    }
   }
 
   PieChartSectionData _metricSlice(String label, double value, Color color) {
@@ -1021,6 +1279,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _showDietPreferenceSheet(BuildContext context) async {
     final user = context.read<UserProvider>().userProfile;
     if (user == null) return;
+    final normalizedCurrentPreference = normalizeDietaryPreference(
+      user.dietaryPreference,
+    );
     await showModalBottomSheet<void>(
       context: context,
       builder: (context) {
@@ -1036,14 +1297,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 12),
-                ...[
-                  ('any', 'No filter'),
-                  ('veg', 'Vegetarian'),
-                  ('nonveg', 'Non-Vegetarian'),
-                ].map((option) {
-                  final selected = user.dietaryPreference == option.$1;
+                ...dietaryPreferenceOptions.map((option) {
+                  final selected = normalizedCurrentPreference == option.code;
                   return ListTile(
-                    title: Text(option.$2),
+                    title: Text(option.label),
+                    subtitle: Text(option.description),
                     trailing: selected
                         ? const Icon(
                             Icons.check,
@@ -1051,10 +1309,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           )
                         : null,
                     onTap: () async {
-                      await context.read<UserProvider>().updateProfile(
-                        user.copyWith(dietaryPreference: option.$1),
+                      final userProvider = context.read<UserProvider>();
+                      final dietPlanProvider = context.read<DietPlanProvider>();
+                      final navigator = Navigator.of(context);
+                      final updatedUser = user.copyWith(
+                        dietaryPreference: option.code,
                       );
-                      if (context.mounted) Navigator.of(context).pop();
+                      await userProvider.updateProfile(updatedUser);
+                      await dietPlanProvider.generate(updatedUser);
+                      if (navigator.mounted) {
+                        navigator.pop();
+                      }
                     },
                   );
                 }),
@@ -1797,5 +2062,158 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'December',
     ];
     return '${months[month.month - 1]} ${month.year}';
+  }
+}
+
+class _BmiStatus {
+  final String label;
+  final Color color;
+  final String message;
+
+  const _BmiStatus({
+    required this.label,
+    required this.color,
+    required this.message,
+  });
+}
+
+class _BmiGauge extends StatelessWidget {
+  final double bmi;
+  final _BmiStatus status;
+
+  const _BmiGauge({required this.bmi, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Positioned.fill(
+          child: CustomPaint(painter: _BmiGaugePainter(bmi: bmi)),
+        ),
+        Positioned(
+          top: 78,
+          child: Column(
+            children: [
+              Text(
+                bmi > 0 ? bmi.toStringAsFixed(1) : '--',
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: status.color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  status.label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: status.color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BmiGaugePainter extends CustomPainter {
+  final double bmi;
+
+  const _BmiGaugePainter({required this.bmi});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.86);
+    final radius = math.min(size.width * 0.38, size.height * 0.70);
+    final strokeWidth = 22.0;
+    final trackRect = Rect.fromCircle(center: center, radius: radius);
+    const startAngle = math.pi;
+    const totalSweep = math.pi;
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = strokeWidth;
+
+    const bands = <({double start, double end, Color color})>[
+      (start: 12.0, end: 18.5, color: Color(0xFF4DA8FF)),
+      (start: 18.5, end: 25.0, color: Color(0xFF1FAE6A)),
+      (start: 25.0, end: 30.0, color: Color(0xFFF5A524)),
+      (start: 30.0, end: 40.0, color: Color(0xFFE35D5D)),
+    ];
+
+    for (final band in bands) {
+      paint.color = band.color;
+      final bandStart = _angleForValue(
+        band.start,
+        startAngle: startAngle,
+        totalSweep: totalSweep,
+      );
+      final bandSweep =
+          _angleForValue(
+            band.end,
+            startAngle: startAngle,
+            totalSweep: totalSweep,
+          ) -
+          bandStart;
+      canvas.drawArc(trackRect, bandStart, bandSweep, false, paint);
+    }
+
+    final markerAngle = _angleForValue(
+      bmi <= 0 ? 18.5 : bmi,
+      startAngle: startAngle,
+      totalSweep: totalSweep,
+    );
+    final markerRadius = radius - (strokeWidth / 2);
+    final markerCenter = Offset(
+      center.dx + math.cos(markerAngle) * markerRadius,
+      center.dy + math.sin(markerAngle) * markerRadius,
+    );
+
+    final markerShadow = Paint()
+      ..color = const Color(0x22000000)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(markerCenter.translate(0, 4), 10, markerShadow);
+
+    final markerPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(markerCenter, 9, markerPaint);
+
+    final markerBorder = Paint()
+      ..color = const Color(0xFF111827)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    canvas.drawCircle(markerCenter, 9, markerBorder);
+  }
+
+  double _angleForValue(
+    double value, {
+    required double startAngle,
+    required double totalSweep,
+  }) {
+    final clamped = value.clamp(12.0, 40.0);
+    final fraction = (clamped - 12.0) / 28.0;
+    return startAngle + (fraction * totalSweep);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BmiGaugePainter oldDelegate) {
+    return oldDelegate.bmi != bmi;
   }
 }

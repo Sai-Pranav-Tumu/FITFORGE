@@ -11,6 +11,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/water_provider.dart';
 import '../../services/nutrition_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dietary_preferences.dart';
 import '../../widgets/top_app_bar.dart';
 
 class CaloriesScreen extends StatefulWidget {
@@ -668,7 +669,8 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
     ColorScheme colorScheme,
   ) {
     final preference =
-        context.watch<UserProvider>().userProfile?.dietaryPreference ?? 'any';
+        context.watch<UserProvider>().userProfile?.dietaryPreference ??
+        DietaryPreferenceCodes.mixed;
     final suggestions = summary.gaps
         .expand((gap) => gap.suggestions)
         .fold<List<FoodItem>>(<FoodItem>[], (list, food) {
@@ -847,25 +849,7 @@ class _CaloriesScreenState extends State<CaloriesScreen> {
   }
 
   bool _matchesDietPreference(FoodItem food, String preference) {
-    if (preference == 'any') return true;
-    final name = food.foodName.toLowerCase();
-    const nonVegKeywords = <String>[
-      'chicken',
-      'mutton',
-      'fish',
-      'prawn',
-      'egg',
-      'beef',
-      'pork',
-      'meat',
-      'tuna',
-      'sardine',
-      'crab',
-      'liver',
-    ];
-    final isNonVeg = nonVegKeywords.any(name.contains);
-    if (preference == 'veg') return !isNonVeg;
-    return isNonVeg;
+    return matchesDietaryPreferenceName(food.foodName, preference);
   }
 
   List<MealEntry> _mealEntries(

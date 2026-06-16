@@ -536,45 +536,54 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       subtitle:
           'Your name helps us personalize the workout dashboard and profile.',
       canContinue: _nameController.text.trim().isNotEmpty,
-      body: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: TextField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.words,
-              textInputAction: TextInputAction.done,
-              onChanged: (_) => setState(() {}),
-              onSubmitted: (_) {
-                if (_nameController.text.trim().isNotEmpty) {
-                  _nextPage();
-                }
-              },
-              decoration: const InputDecoration(
-                hintText: 'Enter your name',
-                prefixIcon: Icon(Icons.person_outline),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 18,
-                ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: TextField(
+                      controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.done,
+                      scrollPadding: const EdgeInsets.only(bottom: 140),
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if (_nameController.text.trim().isNotEmpty) {
+                          _nextPage();
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        hintText: 'Enter your name',
+                        prefixIcon: Icon(Icons.person_outline),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'We will show this on the workout page, greetings, and progress areas.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'We will show this on the workout page, greetings, and progress areas.',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -806,7 +815,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       canContinue: selectedValue != null,
       body: ListView.separated(
         itemCount: options.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 16),
+        separatorBuilder: (_, _) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
           final option = options[index];
           final isSelected = selectedValue == option.title;

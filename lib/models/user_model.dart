@@ -1,3 +1,5 @@
+import '../utils/dietary_preferences.dart';
+
 class UserModel {
   static const String defaultTargetMuscleFocus = 'Full Body';
   static const String defaultJointSensitivity = 'None';
@@ -36,6 +38,7 @@ class UserModel {
   final String targetMuscleFocus;
   final String jointSensitivity;
   final int streak;
+  final List<String> completedWorkoutDates;
   final bool onboardingComplete;
 
   List<String> get targetMuscleFocuses => _readPreferenceList(
@@ -83,6 +86,12 @@ class UserModel {
 
   String get primaryTargetMuscleFocus => targetMuscleFocuses.first;
   String get primaryJointSensitivity => jointSensitivities.first;
+  List<String> get workoutCompletionDates =>
+      _readDateValues(completedWorkoutDates);
+  int get completedWorkoutCount => workoutCompletionDates.length;
+
+  bool hasCompletedWorkoutOn(DateTime date) =>
+      workoutCompletionDates.contains(workoutDateKey(date));
 
   UserModel({
     required this.id,
@@ -98,7 +107,7 @@ class UserModel {
     this.height = 170.0,
     this.avatarKey = 'person',
     this.preferredUnits = 'metric',
-    this.dietaryPreference = 'any',
+    this.dietaryPreference = DietaryPreferenceCodes.mixed,
     this.trainingLevel = 'Beginner',
     this.workoutLocation = 'Home',
     this.availableEquipment = 'Bodyweight',
@@ -106,6 +115,7 @@ class UserModel {
     this.targetMuscleFocus = defaultTargetMuscleFocus,
     this.jointSensitivity = defaultJointSensitivity,
     this.streak = 0,
+    this.completedWorkoutDates = const <String>[],
     this.onboardingComplete = false,
   });
 
@@ -133,6 +143,7 @@ class UserModel {
     List<String>? targetMuscleFocuses,
     List<String>? jointSensitivities,
     int? streak,
+    List<String>? completedWorkoutDates,
     bool? onboardingComplete,
   }) {
     return UserModel(
@@ -149,7 +160,9 @@ class UserModel {
       height: height ?? this.height,
       avatarKey: avatarKey ?? this.avatarKey,
       preferredUnits: preferredUnits ?? this.preferredUnits,
-      dietaryPreference: dietaryPreference ?? this.dietaryPreference,
+      dietaryPreference: normalizeDietaryPreference(
+        dietaryPreference ?? this.dietaryPreference,
+      ),
       trainingLevel: trainingLevel ?? this.trainingLevel,
       workoutLocation: workoutLocation ?? this.workoutLocation,
       availableEquipment: availableEquipment ?? this.availableEquipment,
@@ -170,6 +183,8 @@ class UserModel {
             )
           : (jointSensitivity ?? this.jointSensitivity),
       streak: streak ?? this.streak,
+      completedWorkoutDates:
+          completedWorkoutDates ?? this.completedWorkoutDates,
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     );
   }
@@ -189,7 +204,9 @@ class UserModel {
       height: (json['height'] ?? 170.0).toDouble(),
       avatarKey: json['avatarKey'] ?? 'person',
       preferredUnits: json['preferredUnits'] ?? 'metric',
-      dietaryPreference: json['dietaryPreference'] ?? 'any',
+      dietaryPreference: normalizeDietaryPreference(
+        json['dietaryPreference'] ?? DietaryPreferenceCodes.mixed,
+      ),
       trainingLevel: json['trainingLevel'] ?? 'Beginner',
       workoutLocation: json['workoutLocation'] ?? 'Home',
       availableEquipment: json['availableEquipment'] ?? 'Bodyweight',
@@ -214,7 +231,12 @@ class UserModel {
         defaultValue: defaultJointSensitivity,
         resetValue: defaultJointSensitivity,
       ),
-      streak: json['streak'] ?? 0,
+      streak:
+          json['streak'] ??
+          calculateWorkoutStreak(
+            _readDateValues(json['completedWorkoutDates']),
+          ),
+      completedWorkoutDates: _readDateValues(json['completedWorkoutDates']),
       onboardingComplete: json['onboardingComplete'] ?? false,
     );
   }
@@ -244,9 +266,50 @@ class UserModel {
       'jointSensitivity': jointSensitivity,
       'jointSensitivities': jointSensitivities,
       'streak': streak,
+      'completedWorkoutDates': workoutCompletionDates,
       'onboardingComplete': onboardingComplete,
     };
   }
+}
+
+String workoutDateKey(DateTime date) {
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
+int calculateWorkoutStreak(List<String> completedWorkoutDates) {
+  final normalizedDates = _readDateValues(completedWorkoutDates);
+  if (normalizedDates.isEmpty) {
+    return 0;
+  }
+
+  var streak = 1;
+  final lastDate = DateTime.tryParse(normalizedDates.last);
+  if (lastDate == null) {
+    return 0;
+  }
+  var previousDate = lastDate;
+
+  for (var index = normalizedDates.length - 2; index >= 0; index--) {
+    final currentDate = DateTime.tryParse(normalizedDates[index]);
+    if (currentDate == null) {
+      continue;
+    }
+
+    final difference = previousDate.difference(currentDate).inDays;
+    if (difference == 1) {
+      streak++;
+      previousDate = currentDate;
+      continue;
+    }
+    if (difference > 1) {
+      break;
+    }
+  }
+
+  return streak;
 }
 
 List<String> _readPreferenceList(
@@ -319,3 +382,28 @@ String _writePreferenceList(
 }
 
 String _normalizePreference(String value) => value.toLowerCase().trim();
+
+List<String> _readDateValues(Object? rawValue) {
+  final rawEntries = switch (rawValue) {
+    List() => rawValue.map((entry) => '$entry'),
+    String() => rawValue.split(RegExp(r'\s*[,|]\s*')),
+    _ => const <String>[],
+  };
+
+  final normalized = <String>{};
+  for (final rawEntry in rawEntries) {
+    final entry = rawEntry.trim();
+    if (entry.isEmpty) {
+      continue;
+    }
+
+    final parsed = DateTime.tryParse(entry);
+    if (parsed == null) {
+      continue;
+    }
+    normalized.add(workoutDateKey(parsed));
+  }
+
+  final sorted = normalized.toList()..sort();
+  return sorted;
+}

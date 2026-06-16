@@ -14,10 +14,7 @@ import '../../widgets/top_app_bar.dart';
 class WorkoutScreen extends StatelessWidget {
   final VoidCallback? onOpenProfile;
 
-  const WorkoutScreen({
-    super.key,
-    this.onOpenProfile,
-  });
+  const WorkoutScreen({super.key, this.onOpenProfile});
 
   @override
   Widget build(BuildContext context) {
@@ -197,15 +194,28 @@ class _WorkoutContentState extends State<_WorkoutContent> {
   Future<void> _openWorkoutSession(
     WorkoutDayPlan plan, {
     int initialExerciseIndex = 0,
+    bool trackCompletion = false,
   }) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final result = await Navigator.of(context).push<WorkoutSessionResult>(
+      MaterialPageRoute<WorkoutSessionResult>(
         fullscreenDialog: true,
         builder: (_) => WorkoutSessionScreen(
           plan: plan,
           initialExerciseIndex: initialExerciseIndex,
+          sessionDate: _selectedDate,
+          trackCompletion: trackCompletion,
         ),
       ),
+    );
+
+    if (!mounted || result?.newlyCompleted != true) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => _WorkoutCompletionDialog(result: result!),
     );
   }
 
@@ -532,6 +542,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               day: date.day,
               isSelected: _isSameDate(date, _selectedDate),
               isActive: !_planForDate(date).isRestDay,
+              isCompleted: widget.profile.hasCompletedWorkoutOn(date),
               compact: false,
               onTap: () => setState(() => _selectedDate = date),
             ),
@@ -605,6 +616,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 day: dayNumber,
                 isSelected: _isSameDate(date, _selectedDate),
                 isActive: !_planForDate(date).isRestDay,
+                isCompleted: widget.profile.hasCompletedWorkoutOn(date),
                 compact: true,
                 onTap: () => setState(() => _selectedDate = date),
               );
@@ -625,15 +637,29 @@ class _WorkoutContentState extends State<_WorkoutContent> {
   Widget _buildWorkoutCard(BuildContext context, WorkoutDayPlan plan) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCompleted = widget.profile.hasCompletedWorkoutOn(_selectedDate);
+    final isToday = _isSameDate(_selectedDate, DateTime.now());
+    final streak = widget.profile.streak;
+    final statusLabel = isCompleted
+        ? (isToday ? 'COMPLETED TODAY' : 'COMPLETED')
+        : (plan.isRestDay ? "TODAY'S RECOVERY" : "TODAY'S WORKOUT");
+    final actionLabel = isCompleted
+        ? 'Review Workout ->'
+        : (plan.isRestDay ? 'Start Recovery ->' : 'Start Workout ->');
+    final actionColor = isCompleted
+        ? const Color(0xFF1FAE6A)
+        : AppTheme.primaryContainer;
 
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF151A22) : const Color(0xFFFFFCF7),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark
-              ? colorScheme.outlineVariant.withValues(alpha: 0.8)
-              : const Color(0xFFE9DECE),
+          color: isCompleted
+              ? actionColor.withValues(alpha: 0.45)
+              : (isDark
+                    ? colorScheme.outlineVariant.withValues(alpha: 0.8)
+                    : const Color(0xFFE9DECE)),
         ),
         boxShadow: [
           BoxShadow(
@@ -673,13 +699,15 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: plan.isRestDay
-                        ? colorScheme.surfaceContainerHighest
-                        : AppTheme.secondaryContainer,
+                    color: isCompleted
+                        ? actionColor
+                        : (plan.isRestDay
+                              ? colorScheme.surfaceContainerHighest
+                              : AppTheme.secondaryContainer),
                     borderRadius: BorderRadius.circular(50),
                   ),
                   child: Text(
-                    plan.isRestDay ? "TODAY'S RECOVERY" : "TODAY'S WORKOUT",
+                    statusLabel,
                     style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
@@ -713,6 +741,53 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (isCompleted) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: actionColor.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: actionColor.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 18,
+                              color: actionColor,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isToday
+                                  ? 'Today is done'
+                                  : 'This session is completed',
+                              style: TextStyle(
+                                color: actionColor,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (streak > 0)
+                          _buildMetaChip(
+                            context,
+                            Icons.local_fire_department_rounded,
+                            '$streak day streak',
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Wrap(
                   spacing: 8,
@@ -750,9 +825,12 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton(
-                    onPressed: () => _openWorkoutSession(plan),
+                    onPressed: () => _openWorkoutSession(
+                      plan,
+                      trackCompletion: !_isFutureDate(_selectedDate),
+                    ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryContainer,
+                      backgroundColor: actionColor,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
                         vertical: 12,
@@ -762,7 +840,7 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                       ),
                     ),
                     child: Text(
-                      plan.isRestDay ? 'Start Recovery ->' : 'Start Workout ->',
+                      actionLabel,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
@@ -808,6 +886,13 @@ class _WorkoutContentState extends State<_WorkoutContent> {
 
   bool _isSameDate(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  bool _isFutureDate(DateTime date) {
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    return normalizedDate.isAfter(normalizedToday);
   }
 
   String _goalReason(UserModel profile) {
@@ -992,7 +1077,11 @@ class _WorkoutContentState extends State<_WorkoutContent> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => _openWorkoutSession(plan, initialExerciseIndex: index),
+        onTap: () => _openWorkoutSession(
+          plan,
+          initialExerciseIndex: index,
+          trackCompletion: false,
+        ),
         child: Ink(
           padding: const EdgeInsets.all(12),
           decoration: _cardDecoration(context),
@@ -1375,6 +1464,7 @@ class _CalendarDay extends StatelessWidget {
   final int day;
   final bool isSelected;
   final bool isActive;
+  final bool isCompleted;
   final bool compact;
   final VoidCallback onTap;
 
@@ -1383,6 +1473,7 @@ class _CalendarDay extends StatelessWidget {
     required this.day,
     required this.isSelected,
     required this.isActive,
+    required this.isCompleted,
     required this.compact,
     required this.onTap,
   });
@@ -1393,8 +1484,10 @@ class _CalendarDay extends StatelessWidget {
     final circleSize = compact ? 32.0 : 36.0;
     final dayFont = compact ? 15.0 : 16.0;
     final dotSize = compact ? 5.0 : 6.0;
+    final completionSize = compact ? 14.0 : 16.0;
     final labelGap = compact ? 0.0 : 8.0;
     final dotGap = compact ? 6.0 : 8.0;
+    final completionColor = const Color(0xFF1FAE6A);
 
     return GestureDetector(
       onTap: onTap,
@@ -1442,18 +1535,187 @@ class _CalendarDay extends StatelessWidget {
             ),
           ),
           SizedBox(height: dotGap),
-          Container(
-            width: dotSize,
-            height: dotSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isActive
-                  ? AppTheme.primaryContainer
-                  : colorScheme.surfaceContainerHighest,
-            ),
-          ),
+          isCompleted
+              ? Container(
+                  width: completionSize,
+                  height: completionSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: completionColor,
+                  ),
+                  child: Icon(
+                    Icons.check_rounded,
+                    size: compact ? 10 : 12,
+                    color: Colors.white,
+                  ),
+                )
+              : Container(
+                  width: dotSize,
+                  height: dotSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isActive
+                        ? AppTheme.primaryContainer
+                        : colorScheme.surfaceContainerHighest,
+                  ),
+                ),
         ],
       ),
+    );
+  }
+}
+
+class _WorkoutCompletionDialog extends StatelessWidget {
+  final WorkoutSessionResult result;
+
+  const _WorkoutCompletionDialog({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final streakText = result.streak <= 1
+        ? 'Your streak has started.'
+        : '${result.streak} day streak is on fire.';
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: AppTheme.secondary.withValues(alpha: 0.28)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x24000000),
+              blurRadius: 28,
+              offset: Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 180, height: 120, child: _FireBurst()),
+            const SizedBox(height: 8),
+            Text(
+              'Workout Completed',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              streakText,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.secondary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.local_fire_department_rounded,
+                    color: AppTheme.secondary,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${result.streak} day streak',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.secondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Keep Going'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FireBurst extends StatelessWidget {
+  const _FireBurst();
+
+  static const List<({double x, double y, double size})> _particles = [
+    (x: -54, y: -12, size: 22),
+    (x: -36, y: -40, size: 18),
+    (x: -8, y: -54, size: 16),
+    (x: 24, y: -44, size: 20),
+    (x: 52, y: -10, size: 18),
+    (x: 38, y: 24, size: 16),
+    (x: 6, y: 34, size: 14),
+    (x: -30, y: 22, size: 18),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeOutBack,
+      builder: (context, value, _) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            for (final particle in _particles)
+              Transform.translate(
+                offset: Offset(particle.x * value, particle.y * value),
+                child: Opacity(
+                  opacity: (0.3 + (value * 0.7)).clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: 0.65 + (value * 0.45),
+                    child: Icon(
+                      Icons.local_fire_department_rounded,
+                      size: particle.size,
+                      color: AppTheme.secondary,
+                    ),
+                  ),
+                ),
+              ),
+            Container(
+              width: 74,
+              height: 74,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.secondary.withValues(alpha: 0.18),
+                    AppTheme.secondary.withValues(alpha: 0.06),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.local_fire_department_rounded,
+              size: 42,
+              color: AppTheme.secondary,
+            ),
+          ],
+        );
+      },
     );
   }
 }
