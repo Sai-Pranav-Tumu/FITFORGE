@@ -7,7 +7,7 @@ class UserModel {
     defaultTargetMuscleFocus,
     'Upper Body',
     'Lower Body',
-    'Core',
+    'Abs',
     'Back & Posture',
   ];
   static const List<String> jointSensitivityOptions = <String>[
@@ -39,8 +39,19 @@ class UserModel {
   /// Negative => ease off volume, positive => add volume.
   final int intensityAdjustment;
   final String avatarKey;
+
+  /// Base64-encoded profile photo (empty when using a default [avatarKey]).
+  final String avatarImage;
   final String preferredUnits;
   final String dietaryPreference;
+
+  /// User's home country (see `lib/utils/regions.dart`). Drives which national
+  /// cuisine the diet plan draws from. Empty defaults to India.
+  final String country;
+
+  /// User's home state/region within [country]. Drives region-aware diet
+  /// recommendations. Empty when not set.
+  final String state;
   final String trainingLevel;
   final String workoutLocation;
   final String availableEquipment;
@@ -147,8 +158,11 @@ class UserModel {
     this.injuryNotes = '',
     this.intensityAdjustment = 0,
     this.avatarKey = 'person',
+    this.avatarImage = '',
     this.preferredUnits = 'metric',
     this.dietaryPreference = DietaryPreferenceCodes.mixed,
+    this.country = '',
+    this.state = '',
     this.trainingLevel = 'Beginner',
     this.workoutLocation = 'Home',
     this.availableEquipment = 'Bodyweight',
@@ -177,8 +191,11 @@ class UserModel {
     String? injuryNotes,
     int? intensityAdjustment,
     String? avatarKey,
+    String? avatarImage,
     String? preferredUnits,
     String? dietaryPreference,
+    String? country,
+    String? state,
     String? trainingLevel,
     String? workoutLocation,
     String? availableEquipment,
@@ -208,10 +225,13 @@ class UserModel {
       injuryNotes: injuryNotes ?? this.injuryNotes,
       intensityAdjustment: intensityAdjustment ?? this.intensityAdjustment,
       avatarKey: avatarKey ?? this.avatarKey,
+      avatarImage: avatarImage ?? this.avatarImage,
       preferredUnits: preferredUnits ?? this.preferredUnits,
       dietaryPreference: normalizeDietaryPreference(
         dietaryPreference ?? this.dietaryPreference,
       ),
+      country: country ?? this.country,
+      state: state ?? this.state,
       trainingLevel: trainingLevel ?? this.trainingLevel,
       workoutLocation: workoutLocation ?? this.workoutLocation,
       availableEquipment: availableEquipment ?? this.availableEquipment,
@@ -256,10 +276,13 @@ class UserModel {
       injuryNotes: json['injuryNotes'] ?? '',
       intensityAdjustment: (json['intensityAdjustment'] ?? 0) as int,
       avatarKey: json['avatarKey'] ?? 'person',
+      avatarImage: json['avatarImage'] ?? '',
       preferredUnits: json['preferredUnits'] ?? 'metric',
       dietaryPreference: normalizeDietaryPreference(
         json['dietaryPreference'] ?? DietaryPreferenceCodes.mixed,
       ),
+      country: json['country'] ?? '',
+      state: json['state'] ?? '',
       trainingLevel: json['trainingLevel'] ?? 'Beginner',
       workoutLocation: json['workoutLocation'] ?? 'Home',
       availableEquipment: json['availableEquipment'] ?? 'Bodyweight',
@@ -312,8 +335,11 @@ class UserModel {
       'injuryNotes': injuryNotes,
       'intensityAdjustment': intensityAdjustment,
       'avatarKey': avatarKey,
+      'avatarImage': avatarImage,
       'preferredUnits': preferredUnits,
       'dietaryPreference': dietaryPreference,
+      'country': country,
+      'state': state,
       'trainingLevel': trainingLevel,
       'workoutLocation': workoutLocation,
       'availableEquipment': availableEquipment,

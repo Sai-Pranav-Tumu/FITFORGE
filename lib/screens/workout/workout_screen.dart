@@ -11,6 +11,7 @@ import '../../services/analytics_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/exercise_media.dart';
 import '../../widgets/top_app_bar.dart';
+import '../../widgets/workout_progress_card.dart';
 
 class WorkoutScreen extends StatelessWidget {
   final VoidCallback? onOpenProfile;
@@ -364,6 +365,8 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 _GoalProgressCard(profile: profile),
                 const SizedBox(height: 14),
               ],
+              WorkoutProgressCard(profile: profile),
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(
@@ -581,8 +584,6 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 ),
                 const SizedBox(height: 18),
               ],
-              _buildPersonalizationOverview(context, profile),
-              const SizedBox(height: 18),
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: _cardDecoration(context),
@@ -674,7 +675,6 @@ class _WorkoutContentState extends State<_WorkoutContent> {
               dayLabel: _weekdayLabel(date.weekday - 1),
               day: date.day,
               isSelected: _isSameDate(date, _selectedDate),
-              isActive: !_planForDate(date).isRestDay,
               isCompleted: widget.profile.hasCompletedWorkoutOn(date),
               compact: false,
               onTap: () => setState(() => _selectedDate = date),
@@ -748,7 +748,6 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 dayLabel: '',
                 day: dayNumber,
                 isSelected: _isSameDate(date, _selectedDate),
-                isActive: !_planForDate(date).isRestDay,
                 isCompleted: widget.profile.hasCompletedWorkoutOn(date),
                 compact: true,
                 onTap: () => setState(() => _selectedDate = date),
@@ -925,17 +924,6 @@ class _WorkoutContentState extends State<_WorkoutContent> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: plan.exercises
-                      .map(
-                        (exercise) =>
-                            _buildExerciseChip(context, exercise.name),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
                   children: [
                     _buildMetaChip(
                       context,
@@ -1076,126 +1064,6 @@ class _WorkoutContentState extends State<_WorkoutContent> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildPersonalizationOverview(
-    BuildContext context,
-    UserModel profile,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final focusAreas = profile.visibleFocusAreas;
-    final jointCareAreas = profile.selectedJointCareAreas;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(context, radius: 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.tune_rounded, color: colorScheme.primary),
-              const SizedBox(width: 10),
-              Text(
-                'Personalized For You',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _buildMetaChip(
-                context,
-                Icons.fitness_center,
-                profile.trainingLevel,
-              ),
-              _buildMetaChip(
-                context,
-                Icons.home_work_rounded,
-                profile.workoutLocation,
-              ),
-              _buildMetaChip(
-                context,
-                Icons.timer_outlined,
-                '${profile.sessionDurationMinutes} min sessions',
-              ),
-              ...focusAreas.map(
-                (focusArea) => _buildMetaChip(
-                  context,
-                  Icons.track_changes_rounded,
-                  focusArea,
-                ),
-              ),
-              _buildMetaChip(
-                context,
-                Icons.handyman_rounded,
-                profile.availableEquipment,
-              ),
-              if (jointCareAreas.isEmpty)
-                _buildMetaChip(
-                  context,
-                  Icons.health_and_safety_outlined,
-                  'No joint limits',
-                )
-              else
-                ...jointCareAreas.map(
-                  (jointCareArea) => _buildMetaChip(
-                    context,
-                    Icons.health_and_safety_outlined,
-                    '$jointCareArea care',
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExerciseChip(BuildContext context, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 11, color: colorScheme.onSurface),
-      ),
-    );
-  }
-
-  Widget _buildMetaChip(BuildContext context, IconData icon, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: colorScheme.primary),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: colorScheme.onSurface,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1387,6 +1255,32 @@ class _WorkoutContentState extends State<_WorkoutContent> {
     }
     if (lower.contains('condition')) return Icons.bolt_rounded;
     return Icons.fitness_center;
+  }
+
+  Widget _buildMetaChip(BuildContext context, IconData icon, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   BoxDecoration _cardDecoration(BuildContext context, {double radius = 16}) {
@@ -1702,7 +1596,6 @@ class _CalendarDay extends StatelessWidget {
   final String dayLabel;
   final int day;
   final bool isSelected;
-  final bool isActive;
   final bool isCompleted;
   final bool compact;
   final VoidCallback onTap;
@@ -1711,7 +1604,6 @@ class _CalendarDay extends StatelessWidget {
     required this.dayLabel,
     required this.day,
     required this.isSelected,
-    required this.isActive,
     required this.isCompleted,
     required this.compact,
     required this.onTap,
@@ -1791,11 +1683,9 @@ class _CalendarDay extends StatelessWidget {
               : Container(
                   width: dotSize,
                   height: dotSize,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isActive
-                        ? AppTheme.primaryContainer
-                        : colorScheme.surfaceContainerHighest,
+                    color: AppTheme.primaryContainer,
                   ),
                 ),
         ],

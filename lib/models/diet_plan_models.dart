@@ -52,6 +52,10 @@ class PlannedFood {
   final int foodId;
   final String foodName;
   final double quantityGrams;
+
+  /// Human-readable serving for a composed dish, e.g. "1 katori dal + 2 rotis".
+  /// Empty for legacy plans built from raw ingredients (those used grams).
+  final String servingLabel;
   final double calories;
   final double protein;
   final double carbs;
@@ -61,16 +65,24 @@ class PlannedFood {
     required this.foodId,
     required this.foodName,
     required this.quantityGrams,
+    this.servingLabel = '',
     required this.calories,
     required this.protein,
     required this.carbs,
     required this.fat,
   });
 
+  /// Preferred display for the portion: the dish serving when present, else the
+  /// legacy gram amount.
+  String get portionLabel => servingLabel.isNotEmpty
+      ? servingLabel
+      : '${quantityGrams.toStringAsFixed(0)}g';
+
   Map<String, dynamic> toJson() => {
         'foodId': foodId,
         'foodName': foodName,
         'quantityGrams': quantityGrams,
+        'servingLabel': servingLabel,
         'calories': calories,
         'protein': protein,
         'carbs': carbs,
@@ -78,13 +90,14 @@ class PlannedFood {
       };
 
   factory PlannedFood.fromJson(Map<String, dynamic> json) => PlannedFood(
-        foodId: json['foodId'] as int,
-        foodName: json['foodName'] as String,
-        quantityGrams: (json['quantityGrams'] as num).toDouble(),
-        calories: (json['calories'] as num).toDouble(),
-        protein: (json['protein'] as num).toDouble(),
-        carbs: (json['carbs'] as num).toDouble(),
-        fat: (json['fat'] as num).toDouble(),
+        foodId: (json['foodId'] as num?)?.toInt() ?? 0,
+        foodName: json['foodName'] as String? ?? '',
+        quantityGrams: (json['quantityGrams'] as num?)?.toDouble() ?? 0,
+        servingLabel: json['servingLabel'] as String? ?? '',
+        calories: (json['calories'] as num?)?.toDouble() ?? 0,
+        protein: (json['protein'] as num?)?.toDouble() ?? 0,
+        carbs: (json['carbs'] as num?)?.toDouble() ?? 0,
+        fat: (json['fat'] as num?)?.toDouble() ?? 0,
       );
 }
 

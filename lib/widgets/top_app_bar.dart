@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dark_mode_toggle.dart';
+import 'user_avatar.dart';
 import '../providers/user_provider.dart';
 import '../providers/water_provider.dart';
 
@@ -55,14 +56,10 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
                   borderRadius: BorderRadius.circular(20),
                   child: Padding(
                     padding: const EdgeInsets.all(2),
-                    child: CircleAvatar(
+                    child: UserAvatar(
+                      avatarKey: user?.avatarKey,
+                      avatarImage: user?.avatarImage,
                       radius: 17,
-                      backgroundColor: _avatarColor(user?.avatarKey),
-                      child: Icon(
-                        _avatarIcon(user?.avatarKey),
-                        size: 18,
-                        color: Colors.white,
-                      ),
                     ),
                   ),
                 ),
@@ -205,33 +202,4 @@ class TopAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  IconData _avatarIcon(String? avatarKey) {
-    switch (avatarKey) {
-      case 'run':
-        return Icons.directions_run;
-      case 'strength':
-        return Icons.fitness_center;
-      case 'yoga':
-        return Icons.self_improvement;
-      case 'cycle':
-        return Icons.pedal_bike;
-      default:
-        return Icons.person;
-    }
-  }
-
-  Color _avatarColor(String? avatarKey) {
-    switch (avatarKey) {
-      case 'run':
-        return const Color(0xFF4E8DFF);
-      case 'strength':
-        return const Color(0xFFFF6B4A);
-      case 'yoga':
-        return const Color(0xFF2BB673);
-      case 'cycle':
-        return const Color(0xFF8B5CF6);
-      default:
-        return Colors.grey;
-    }
-  }
 }

@@ -15,9 +15,11 @@ import '../../services/entitlement_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/nutrition_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/user_avatar.dart';
 import '../premium/paywall_screen.dart';
 import '../workout/workout_history_screen.dart';
 import '../../utils/dietary_preferences.dart';
+import '../../utils/regions.dart';
 import '../../widgets/auth_error_card.dart';
 import '../../widgets/dark_mode_toggle.dart';
 import '../../widgets/top_app_bar.dart';
@@ -51,7 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     alignment: Alignment.bottomRight,
                     children: [
                       InkWell(
-                        onTap: () => _showAvatarPicker(context),
+                        onTap: () => _onAvatarTap(context),
                         borderRadius: BorderRadius.circular(999),
                         child: Container(
                           padding: const EdgeInsets.all(4),
@@ -66,14 +68,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               end: Alignment.bottomRight,
                             ),
                           ),
-                          child: CircleAvatar(
+                          child: UserAvatar(
+                            avatarKey: user?.avatarKey,
+                            avatarImage: user?.avatarImage,
                             radius: 44,
-                            backgroundColor: _avatarColor(user?.avatarKey),
-                            child: Icon(
-                              _avatarIcon(user?.avatarKey),
-                              color: Colors.white,
-                              size: 38,
-                            ),
                           ),
                         ),
                       ),
@@ -244,6 +242,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     TextButton(
                       onPressed: () => _showDietPreferenceSheet(context),
+                      child: const Text('Change'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.public_rounded,
+                      color: AppTheme.primaryContainer,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Country',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            (user?.country ?? '').isEmpty
+                                ? 'India'
+                                : user!.country,
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _showCountryPickerSheet(context),
+                      child: const Text('Change'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.place_rounded,
+                      color: AppTheme.primaryContainer,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Region',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            (user?.state ?? '').isEmpty
+                                ? 'Not set'
+                                : user!.state,
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _showStatePickerSheet(context),
                       child: const Text('Change'),
                     ),
                   ],
@@ -1239,36 +1327,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${height.toStringAsFixed(0)} cm';
   }
 
-  IconData _avatarIcon(String? avatarKey) {
-    switch (avatarKey) {
-      case 'run':
-        return Icons.directions_run;
-      case 'strength':
-        return Icons.fitness_center;
-      case 'yoga':
-        return Icons.self_improvement;
-      case 'cycle':
-        return Icons.pedal_bike;
-      default:
-        return Icons.person;
-    }
-  }
-
-  Color _avatarColor(String? avatarKey) {
-    switch (avatarKey) {
-      case 'run':
-        return const Color(0xFF4E8DFF);
-      case 'strength':
-        return const Color(0xFFFF6B4A);
-      case 'yoga':
-        return const Color(0xFF2BB673);
-      case 'cycle':
-        return const Color(0xFF8B5CF6);
-      default:
-        return Colors.grey;
-    }
-  }
-
   Future<void> _showRemindersSheet(BuildContext context) async {
     final settings = await NotificationService.instance
         .loadWorkoutReminderSettings();
@@ -1536,14 +1594,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _showAvatarPicker(BuildContext context) async {
+  Future<void> _showCountryPickerSheet(BuildContext context) async {
     final user = context.read<UserProvider>().userProfile;
     if (user == null) return;
-    const avatars = <String>['person', 'run', 'strength', 'yoga', 'cycle'];
+    final current = user.country.isEmpty ? Countries.india : user.country;
 
     await showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -1552,48 +1610,222 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Choose Profile Picture',
+                  'Select your country',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  children: avatars.map((avatar) {
-                    final selected = user.avatarKey == avatar;
-                    return InkWell(
-                      onTap: () async {
-                        await context.read<UserProvider>().updateProfile(
-                          user.copyWith(avatarKey: avatar),
-                        );
-                        if (context.mounted) Navigator.of(context).pop();
-                      },
-                      borderRadius: BorderRadius.circular(999),
-                      child: CircleAvatar(
-                        radius: 28,
-                        backgroundColor: _avatarColor(avatar),
-                        child: Stack(
-                          alignment: Alignment.bottomRight,
-                          children: [
-                            Icon(_avatarIcon(avatar), color: Colors.white),
-                            if (selected)
-                              const Icon(
-                                Icons.check_circle,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                const SizedBox(height: 4),
+                Text(
+                  'Your plan switches to this country\'s cuisine. Pick your region next.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
+                const SizedBox(height: 8),
+                ...Countries.all.map((country) {
+                  final selected = current == country;
+                  return ListTile(
+                    title: Text(country),
+                    trailing: selected
+                        ? const Icon(
+                            Icons.check,
+                            color: AppTheme.primaryContainer,
+                          )
+                        : null,
+                    onTap: () async {
+                      final userProvider = context.read<UserProvider>();
+                      final navigator = Navigator.of(sheetContext);
+                      // Country changed: clear the now-mismatched region; the
+                      // user picks a new one via the Region card.
+                      final updatedUser = user.copyWith(
+                        country: country,
+                        state: country == user.country ? user.state : '',
+                      );
+                      await userProvider.updateProfile(updatedUser);
+                      if (navigator.mounted) navigator.pop();
+                    },
+                  );
+                }),
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  Future<void> _showStatePickerSheet(BuildContext context) async {
+    final user = context.read<UserProvider>().userProfile;
+    if (user == null) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final searchController = TextEditingController();
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 16,
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+            ),
+            child: StatefulBuilder(
+              builder: (context, setSheetState) {
+                final query = searchController.text.trim().toLowerCase();
+                final country =
+                    user.country.isEmpty ? Countries.india : user.country;
+                final matches = statesForCountry(country)
+                    .where(
+                      (s) => query.isEmpty || s.toLowerCase().contains(query),
+                    )
+                    .toList(growable: false);
+                final media = MediaQuery.of(context);
+                // Cap the sheet to the space left above the keyboard so the
+                // Flexible list shrinks instead of overflowing on any screen.
+                final maxSheetHeight =
+                    media.size.height - media.viewInsets.bottom - 120;
+                return ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: maxSheetHeight < 200 ? 200 : maxSheetHeight,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Select your region',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Your diet plan will favor dishes common in this region.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: searchController,
+                        onChanged: (_) => setSheetState(() {}),
+                        decoration: const InputDecoration(
+                          hintText: 'Search your region',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: matches.length,
+                          itemBuilder: (context, index) {
+                            final stateName = matches[index];
+                            final selected = user.state == stateName;
+                            return ListTile(
+                              title: Text(stateName),
+                              trailing: selected
+                                  ? const Icon(
+                                      Icons.check,
+                                      color: AppTheme.primaryContainer,
+                                    )
+                                  : null,
+                              onTap: () async {
+                                final userProvider = context
+                                    .read<UserProvider>();
+                                final dietPlanProvider = context
+                                    .read<DietPlanProvider>();
+                                final navigator = Navigator.of(sheetContext);
+                                final updatedUser = user.copyWith(
+                                  state: stateName,
+                                );
+                                await userProvider.updateProfile(updatedUser);
+                                await dietPlanProvider.generate(updatedUser);
+                                if (navigator.mounted) navigator.pop();
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _onAvatarTap(BuildContext context) async {
+    final user = context.read<UserProvider>().userProfile;
+    if (user == null) return;
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.visibility_outlined),
+                title: const Text('View photo'),
+                onTap: () => Navigator.of(sheetContext).pop('view'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit'),
+                subtitle: const Text('Camera, gallery or default avatars'),
+                onTap: () => Navigator.of(sheetContext).pop('edit'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (action == null || !context.mounted) return;
+
+    if (action == 'view') {
+      showFullScreenAvatar(
+        context,
+        avatarKey: user.avatarKey,
+        avatarImage: user.avatarImage,
+      );
+    } else if (action == 'edit') {
+      await _showAvatarPicker(context);
+    }
+  }
+
+  Future<void> _showAvatarPicker(BuildContext context) async {
+    final userProvider = context.read<UserProvider>();
+    final user = userProvider.userProfile;
+    if (user == null) return;
+
+    final selection = await showAvatarPickerSheet(
+      context,
+      currentKey: user.avatarImage.isEmpty ? user.avatarKey : null,
+    );
+    if (selection == null) return;
+
+    if (selection.avatarImage != null) {
+      await userProvider.updateProfile(
+        user.copyWith(avatarImage: selection.avatarImage),
+      );
+    } else if (selection.avatarKey != null) {
+      // Picking a default avatar clears any uploaded photo.
+      await userProvider.updateProfile(
+        user.copyWith(avatarKey: selection.avatarKey, avatarImage: ''),
+      );
+    }
   }
 
   Future<void> _showWorkoutPreferencesSheet(BuildContext context) async {

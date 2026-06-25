@@ -1,37 +1,43 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
-
+import '../models/diet_catalog_models.dart';
 import '../models/diet_plan_models.dart';
-import '../models/nutrition_models.dart';
 import '../models/user_model.dart';
-import '../utils/dietary_preferences.dart';
-import 'nutrition_service.dart';
+import 'diet_catalog_service.dart';
+import 'diet_recommender_model.dart';
+
+/// Scores how *suitable* a dish is for a given user (goal/region/diet fit),
+/// independent of the running meal budget. Either the on-device TFLite model
+/// ([DietRecommenderModel]) or the heuristic fallback supplies this.
+typedef DishSuitability = double Function(CatalogDish dish);
 
 class DietPlanService {
   DietPlanService._();
 
   static final DietPlanService instance = DietPlanService._();
 
-  final NutritionService _nutrition = NutritionService.instance;
+  final DietCatalogService _catalog = DietCatalogService.instance;
+  final DietRecommenderModel _model = DietRecommenderModel.instance;
 
   Future<DietPlan> generate(UserModel user) async {
-    await _nutrition.initialize();
-
     final tdee = TdeeEngine.calculate(user);
-    final allFoods = await _nutrition.getAllFoodsForPlanning();
-    if (allFoods.isEmpty) {
-      throw StateError('Food database is empty. Import nutrition data first.');
+    final dishes = await _catalog.loadAll();
+    if (dishes.isEmpty) {
+      throw StateError('Dish catalog is empty. Check diet_catalog.json asset.');
     }
 
-    final days = await compute(
-      _buildWeekInIsolate,
-      _IsolateArgs(
-        foods: allFoods,
-        tdee: tdee,
-        seed: DateTime.now().millisecondsSinceEpoch,
-        dietaryPreference: normalizeDietaryPreference(user.dietaryPreference),
-      ),
+    await _model.ensureLoaded();
+    final context = PlanUserContext.forUser(user, tdee);
+    final suitability = _resolveSuitability(context);
+    final rng = math.Random(DateTime.now().millisecondsSinceEpoch);
+
+    final days = MealPlanBuilder.buildWeek(
+      catalog: _catalog,
+      allDishes: dishes,
+      tdee: tdee,
+      context: context,
+      suitability: suitability,
+      rng: rng,
     );
 
     return DietPlan(
@@ -48,55 +54,69 @@ class DietPlanService {
     required String slot,
     required UserModel user,
   }) async {
-    await _nutrition.initialize();
-    final allFoods = await _nutrition.getAllFoodsForPlanning();
-    final budget = MealPlanBuilder._slotBudget(plan.tdee, slot);
+    final dishes = await _catalog.loadAll();
+    await _model.ensureLoaded();
+    final context = PlanUserContext.forUser(user, plan.tdee);
+    final suitability = _resolveSuitability(context);
     final rng = math.Random(DateTime.now().microsecondsSinceEpoch);
-    final dietaryPreference = normalizeDietaryPreference(
-      user.dietaryPreference,
-    );
 
+    // Avoid repeating dishes already on the plate that day.
     final usedIds = plan.days[dayIndex].meals
+        .where((meal) => meal.slot != slot)
         .expand((meal) => meal.foods)
         .map((food) => food.foodId)
         .toSet();
-    final available = allFoods
-        .where((food) => !usedIds.contains(food.id))
-        .toList();
 
-    return MealPlanBuilder._buildMeal(
+    return MealPlanBuilder.buildMeal(
+      catalog: _catalog,
+      allDishes: dishes,
       slot: slot,
-      foods: available.isNotEmpty ? available : allFoods,
-      budget: budget,
+      tdee: plan.tdee,
+      context: context,
+      suitability: suitability,
+      recentlyUsedIds: usedIds,
+      weekUsedIds: usedIds,
       rng: rng,
-      dietaryPreference: dietaryPreference,
-      dayIndex: dayIndex,
     );
+  }
+
+  /// Picks the model scorer when the TFLite model is available, otherwise the
+  /// heuristic. Both share the same `CatalogDish -> 0..1` contract.
+  DishSuitability _resolveSuitability(PlanUserContext context) {
+    if (_model.isAvailable) {
+      return (dish) => _model.score(context: context, dish: dish);
+    }
+    return (dish) => HeuristicScorer.suitability(dish, context.goalKey);
   }
 }
 
-List<PlannedDay> _buildWeekInIsolate(_IsolateArgs args) {
-  final rng = math.Random(args.seed);
-  return MealPlanBuilder.buildWeek(
-    foods: args.foods,
-    tdee: args.tdee,
-    rng: rng,
-    dietaryPreference: args.dietaryPreference,
-  );
-}
+/// Pure-math suitability that mirrors what the Colab model learns, used as the
+/// offline fallback (and to bootstrap before any model is trained).
+class HeuristicScorer {
+  HeuristicScorer._();
 
-class _IsolateArgs {
-  final List<FoodItem> foods;
-  final TdeeResult tdee;
-  final int seed;
-  final String dietaryPreference;
+  static double suitability(CatalogDish dish, String goalKey) {
+    if (dish.kcal <= 0) return 0;
 
-  const _IsolateArgs({
-    required this.foods,
-    required this.tdee,
-    required this.seed,
-    required this.dietaryPreference,
-  });
+    final proteinScore = (dish.proteinPer100Kcal / 35.0).clamp(0.0, 1.0);
+    final absProteinScore = (dish.protein / 35.0).clamp(0.0, 1.0);
+    final fiberScore = (dish.fiber / 12.0).clamp(0.0, 1.0);
+    final fatPct = (dish.fat * 9.0) / dish.kcal;
+    final leanScore = (1.0 - (fatPct / 0.45)).clamp(0.0, 1.0);
+    final carbPct = (dish.carbs * 4.0) / dish.kcal;
+    final carbScore = (carbPct / 0.6).clamp(0.0, 1.0);
+
+    switch (goalKey) {
+      case 'fat_loss':
+        return 0.5 * proteinScore + 0.3 * fiberScore + 0.2 * leanScore;
+      case 'muscle_gain':
+        return 0.6 * proteinScore + 0.25 * absProteinScore + 0.15 * carbScore;
+      case 'endurance':
+        return 0.5 * carbScore + 0.3 * proteinScore + 0.2 * fiberScore;
+      default: // maintenance
+        return 0.4 * proteinScore + 0.3 * fiberScore + 0.3 * leanScore;
+    }
+  }
 }
 
 class TdeeEngine {
@@ -218,289 +238,199 @@ class MealPlanBuilder {
     'snack': 0.10,
   };
 
+  static const List<String> _slotOrder = <String>[
+    'breakfast',
+    'lunch',
+    'dinner',
+    'snack',
+  ];
+
   static List<PlannedDay> buildWeek({
-    required List<FoodItem> foods,
+    required DietCatalogService catalog,
+    required List<CatalogDish> allDishes,
     required TdeeResult tdee,
+    required PlanUserContext context,
+    required DishSuitability suitability,
     required math.Random rng,
-    required String dietaryPreference,
   }) {
-    return List<PlannedDay>.generate(
-      7,
-      (dayIndex) => _buildDay(
-        dayIndex: dayIndex,
-        foods: foods,
-        tdee: tdee,
-        rng: rng,
-        dietaryPreference: dietaryPreference,
-      ),
-    );
+    // Tracks how recently a dish appeared so the week stays varied: maps dish
+    // id -> most recent day index it was used.
+    final lastUsedDay = <int, int>{};
+
+    return List<PlannedDay>.generate(7, (dayIndex) {
+      final dayUsedIds = <int>{};
+      final meals = <PlannedMeal>[];
+
+      for (final slot in _slotOrder) {
+        // "Recently used" = used today or in the previous two days.
+        final recentlyUsed = <int>{
+          ...dayUsedIds,
+          ...lastUsedDay.entries
+              .where((e) => (dayIndex - e.value) <= 2)
+              .map((e) => e.key),
+        };
+
+        final meal = buildMeal(
+          catalog: catalog,
+          allDishes: allDishes,
+          slot: slot,
+          tdee: tdee,
+          context: context,
+          suitability: suitability,
+          recentlyUsedIds: recentlyUsed,
+          weekUsedIds: lastUsedDay.keys.toSet(),
+          rng: rng,
+        );
+
+        for (final food in meal.foods) {
+          dayUsedIds.add(food.foodId);
+          lastUsedDay[food.foodId] = dayIndex;
+        }
+        meals.add(meal);
+      }
+
+      return PlannedDay(dayIndex: dayIndex, meals: meals);
+    });
   }
 
-  static PlannedDay _buildDay({
-    required int dayIndex,
-    required List<FoodItem> foods,
+  static PlannedMeal buildMeal({
+    required DietCatalogService catalog,
+    required List<CatalogDish> allDishes,
+    required String slot,
     required TdeeResult tdee,
+    required PlanUserContext context,
+    required DishSuitability suitability,
+    required Set<int> recentlyUsedIds,
+    required Set<int> weekUsedIds,
     required math.Random rng,
-    required String dietaryPreference,
   }) {
-    final shuffled = List<FoodItem>.from(foods)..shuffle(rng);
-    final usedIds = <int>{};
-    final meals = <PlannedMeal>[];
-
-    for (final slot in _slotFractions.keys) {
-      final available = shuffled
-          .where((food) => !usedIds.contains(food.id))
-          .toList();
-      final meal = _buildMeal(
-        slot: slot,
-        foods: available.isNotEmpty ? available : shuffled,
-        budget: _slotBudget(tdee, slot),
-        rng: rng,
-        dietaryPreference: dietaryPreference,
-        dayIndex: dayIndex,
-      );
-      for (final food in meal.foods) {
-        usedIds.add(food.foodId);
-      }
-      meals.add(meal);
+    final budget = tdee.targetCalories * (_slotFractions[slot] ?? 0.25);
+    final candidates = catalog.dishesFor(
+      allDishes: allDishes,
+      slot: slot,
+      dietaryPreference: context.dietaryPreference,
+      country: context.countryCode,
+      zone: context.zone,
+    );
+    if (candidates.isEmpty) {
+      return PlannedMeal(slot: slot, foods: const <PlannedFood>[]);
     }
 
-    return PlannedDay(dayIndex: dayIndex, meals: meals);
-  }
+    final chosen = <CatalogDish>[];
+    final chosenIds = <int>{};
 
-  static _MacroBudget _slotBudget(TdeeResult tdee, String slot) {
-    final fraction = _slotFractions[slot] ?? 0.25;
-    return _MacroBudget(
-      calories: tdee.targetCalories * fraction,
-      protein: tdee.targetProtein * fraction,
-      carbs: tdee.targetCarbs * fraction,
-      fat: tdee.targetFat * fraction,
-    );
-  }
-
-  static PlannedMeal _buildMeal({
-    required String slot,
-    required List<FoodItem> foods,
-    required _MacroBudget budget,
-    required math.Random rng,
-    required String dietaryPreference,
-    required int dayIndex,
-  }) {
-    final chosen = <PlannedFood>[];
-    var remaining = budget;
-    final targetItems = slot == 'snack' ? 1 : _itemsForSlot(slot, rng);
-    final strategy = _strategyForMeal(
-      foods: foods,
-      dietaryPreference: dietaryPreference,
-      slot: slot,
-      dayIndex: dayIndex,
-      targetItems: targetItems,
+    // Primary dish: best overall fit for the full slot budget.
+    final primary = _pickBest(
+      candidates: candidates,
+      targetKcal: budget * 0.9,
+      hardCap: budget * 1.25 + 120,
+      suitability: suitability,
+      recentlyUsedIds: recentlyUsedIds,
+      weekUsedIds: weekUsedIds,
+      excludeIds: chosenIds,
       rng: rng,
     );
+    if (primary == null) return PlannedMeal(slot: slot, foods: const []);
+    chosen.add(primary);
+    chosenIds.add(primary.id);
 
-    for (var i = 0; i < targetItems && remaining.calories > 50; i++) {
-      final preferredPool = i < strategy.preferredItemCount
-          ? strategy.preferredFoods
-          : strategy.allowedFoods;
-      final candidate =
-          _pickBestFood(preferredPool, remaining, chosen, rng) ??
-          _pickBestFood(strategy.allowedFoods, remaining, chosen, rng);
-      if (candidate == null) break;
-
-      final fillFraction = i == targetItems - 1
-          ? 0.9
-          : (0.4 + rng.nextDouble() * 0.2);
-      final calorieTarget = remaining.calories * fillFraction;
-      final rawGrams = (calorieTarget / candidate.calories) * 100.0;
-      final grams = _roundToPortionSize(rawGrams, slot, i).clamp(25.0, 400.0);
-      final ratio = grams / 100.0;
-
-      final plannedFood = PlannedFood(
-        foodId: candidate.id,
-        foodName: candidate.foodName,
-        quantityGrams: grams,
-        calories: candidate.calories * ratio,
-        protein: candidate.protein * ratio,
-        carbs: candidate.carbs * ratio,
-        fat: candidate.fat * ratio,
+    // Optional light complement when a single dish leaves a real gap (skip for
+    // snacks, which stay a single item).
+    final remaining = budget - primary.kcal;
+    final maxItems = slot == 'snack' ? 1 : 2;
+    if (chosen.length < maxItems && remaining > 220) {
+      final side = _pickBest(
+        candidates: candidates
+            .where((d) => d.kcal <= remaining + 120 && d.kcal <= 320)
+            .toList(growable: false),
+        targetKcal: remaining * 0.9,
+        hardCap: remaining + 130,
+        suitability: suitability,
+        recentlyUsedIds: recentlyUsedIds,
+        weekUsedIds: weekUsedIds,
+        excludeIds: chosenIds,
+        rng: rng,
       );
-
-      chosen.add(plannedFood);
-      remaining = remaining.subtract(plannedFood);
+      if (side != null) {
+        chosen.add(side);
+        chosenIds.add(side.id);
+      }
     }
 
-    return PlannedMeal(slot: slot, foods: chosen);
-  }
-
-  static _MealSelectionStrategy _strategyForMeal({
-    required List<FoodItem> foods,
-    required String dietaryPreference,
-    required String slot,
-    required int dayIndex,
-    required int targetItems,
-    required math.Random rng,
-  }) {
-    final preference = normalizeDietaryPreference(dietaryPreference);
-    final vegetarianFoods = foods
-        .where((food) => !isNonVegFoodName(food.foodName))
-        .toList(growable: false);
-    final nonVegFoods = foods
-        .where((food) => isNonVegFoodName(food.foodName))
-        .toList(growable: false);
-
-    List<FoodItem> fallback(List<FoodItem> primary) =>
-        primary.isNotEmpty ? primary : foods;
-
-    if (preference == DietaryPreferenceCodes.vegetarian) {
-      final allowedFoods = fallback(vegetarianFoods);
-      return _MealSelectionStrategy(
-        allowedFoods: allowedFoods,
-        preferredFoods: allowedFoods,
-        preferredItemCount: targetItems,
-      );
-    }
-
-    if (preference == DietaryPreferenceCodes.nonVegOnly) {
-      final allowedFoods = fallback(nonVegFoods);
-      return _MealSelectionStrategy(
-        allowedFoods: allowedFoods,
-        preferredFoods: allowedFoods,
-        preferredItemCount: targetItems,
-      );
-    }
-
-    if (slot == 'breakfast' || slot == 'snack') {
-      final preferredFoods = fallback(vegetarianFoods);
-      return _MealSelectionStrategy(
-        allowedFoods: foods,
-        preferredFoods: preferredFoods,
-        preferredItemCount: targetItems,
-      );
-    }
-
-    final shouldIncludeNonVeg =
-        nonVegFoods.isNotEmpty &&
-        ((slot == 'lunch' && (dayIndex.isEven || rng.nextBool())) ||
-            (slot == 'dinner' && rng.nextDouble() < 0.45));
-
-    if (shouldIncludeNonVeg) {
-      return _MealSelectionStrategy(
-        allowedFoods: foods,
-        preferredFoods: nonVegFoods,
-        preferredItemCount: 1,
-      );
-    }
-
-    final preferredFoods = fallback(vegetarianFoods);
-    return _MealSelectionStrategy(
-      allowedFoods: foods,
-      preferredFoods: preferredFoods,
-      preferredItemCount: targetItems,
+    return PlannedMeal(
+      slot: slot,
+      foods: chosen.map(_toPlannedFood).toList(growable: false),
     );
   }
 
-  static FoodItem? _pickBestFood(
-    List<FoodItem> foods,
-    _MacroBudget remaining,
-    List<PlannedFood> chosen,
-    math.Random rng,
-  ) {
-    final chosenIds = chosen.map((food) => food.foodId).toSet();
-    final candidates = foods.where((food) {
-      return !chosenIds.contains(food.id) &&
-          food.calories > 1 &&
-          food.calories <= remaining.calories + 120;
-    }).toList();
-
-    if (candidates.isEmpty) return null;
-
-    final sample = candidates.length > 60
-        ? (List<FoodItem>.from(candidates)..shuffle(rng)).take(60).toList()
-        : candidates;
-
+  static CatalogDish? _pickBest({
+    required List<CatalogDish> candidates,
+    required double targetKcal,
+    required double hardCap,
+    required DishSuitability suitability,
+    required Set<int> recentlyUsedIds,
+    required Set<int> weekUsedIds,
+    required Set<int> excludeIds,
+    required math.Random rng,
+  }) {
+    CatalogDish? best;
     var bestScore = -double.infinity;
-    FoodItem? best;
-    for (final food in sample) {
-      final score = _scoreFood(food, remaining);
+
+    for (final dish in candidates) {
+      if (excludeIds.contains(dish.id)) continue;
+      if (dish.kcal > hardCap) continue;
+
+      final macroFit = _macroFit(dish.kcal, targetKcal);
+      final suit = suitability(dish).clamp(0.0, 1.0);
+
+      var penalty = 0.0;
+      if (recentlyUsedIds.contains(dish.id)) {
+        penalty += 0.6; // strongly discourage same/near-day repeats
+      } else if (weekUsedIds.contains(dish.id)) {
+        penalty += 0.2; // mildly discourage anything already used this week
+      }
+
+      final jitter = rng.nextDouble() * 0.08; // keeps plans from being identical
+      final score = (suit * 0.55) + (macroFit * 0.35) - penalty + jitter;
+
       if (score > bestScore) {
         bestScore = score;
-        best = food;
+        best = dish;
+      }
+    }
+
+    // If everything was excluded/penalized away, fall back to the closest-kcal
+    // candidate so the slot is never empty.
+    if (best == null) {
+      for (final dish in candidates) {
+        if (excludeIds.contains(dish.id)) continue;
+        final macroFit = _macroFit(dish.kcal, targetKcal);
+        if (macroFit > bestScore) {
+          bestScore = macroFit;
+          best = dish;
+        }
       }
     }
     return best;
   }
 
-  static double _scoreFood(FoodItem food, _MacroBudget remaining) {
-    if (food.calories <= 0) return -999;
-
-    final proteinRatio = (food.protein * 4.0) / food.calories;
-    final remainingProteinRatio =
-        (remaining.protein * 4.0) / math.max(1.0, remaining.calories);
-    final proteinMatch = 1.0 - (proteinRatio - remainingProteinRatio).abs();
-    final densityScore = (food.nutrients['nutrition_density'] ?? 0) / 100.0;
-    final calorieFit = food.calories <= remaining.calories ? 1.0 : 0.5;
-    final fiberBonus = ((food.nutrients['dietary_fiber'] ?? 0) / 15.0).clamp(
-      0.0,
-      1.0,
-    );
-
-    return (proteinMatch * 0.45) +
-        (densityScore * 0.25) +
-        (calorieFit * 0.15) +
-        (fiberBonus * 0.15);
+  /// 1.0 when the dish hits the target calories, decaying as it drifts away.
+  static double _macroFit(double dishKcal, double targetKcal) {
+    if (targetKcal <= 0) return 0;
+    final diff = (dishKcal - targetKcal).abs() / targetKcal;
+    return (1.0 - diff).clamp(0.0, 1.0);
   }
 
-  static int _itemsForSlot(String slot, math.Random rng) {
-    switch (slot) {
-      case 'breakfast':
-        return 2 + rng.nextInt(2);
-      case 'lunch':
-      case 'dinner':
-        return 3 + rng.nextInt(2);
-      default:
-        return 1;
-    }
-  }
-
-  static double _roundToPortionSize(double grams, String slot, int itemIndex) {
-    if (itemIndex == 0 && slot != 'snack') {
-      return (grams / 50).round() * 50.0;
-    }
-    return (grams / 25).round() * 25.0;
-  }
-}
-
-class _MacroBudget {
-  final double calories;
-  final double protein;
-  final double carbs;
-  final double fat;
-
-  const _MacroBudget({
-    required this.calories,
-    required this.protein,
-    required this.carbs,
-    required this.fat,
-  });
-
-  _MacroBudget subtract(PlannedFood food) {
-    return _MacroBudget(
-      calories: math.max(0, calories - food.calories),
-      protein: math.max(0, protein - food.protein),
-      carbs: math.max(0, carbs - food.carbs),
-      fat: math.max(0, fat - food.fat),
+  static PlannedFood _toPlannedFood(CatalogDish dish) {
+    return PlannedFood(
+      foodId: dish.id,
+      foodName: dish.name,
+      quantityGrams: 0,
+      servingLabel: dish.serving,
+      calories: dish.kcal,
+      protein: dish.protein,
+      carbs: dish.carbs,
+      fat: dish.fat,
     );
   }
-}
-
-class _MealSelectionStrategy {
-  final List<FoodItem> allowedFoods;
-  final List<FoodItem> preferredFoods;
-  final int preferredItemCount;
-
-  const _MealSelectionStrategy({
-    required this.allowedFoods,
-    required this.preferredFoods,
-    required this.preferredItemCount,
-  });
 }

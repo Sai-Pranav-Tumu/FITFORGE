@@ -1,5 +1,6 @@
 import '../models/exercise_library_models.dart';
 import '../models/user_model.dart';
+import '../models/workout_adaptation.dart';
 import '../models/workout_plan.dart';
 
 class WorkoutEngineService {
@@ -8,17 +9,41 @@ class WorkoutEngineService {
   static WorkoutRecommendation buildRecommendation({
     required UserModel profile,
     required List<ExerciseDefinition> exercises,
+    WorkoutAdaptation? adaptation,
   }) {
-    final filtered = _compatibleExercises(profile, exercises);
-    final sourcePool = filtered.isNotEmpty ? filtered : exercises;
-    final weeklyPlan = _buildWeeklyPlan(profile, sourcePool);
+    // Fold the streak/recency/performance-derived volume bias into the same
+    // mechanism the manual "too easy / too hard" feedback already uses, so the
+    // plan auto-adapts to how the user is actually training. Capped so manual +
+    // automatic adjustments can never push volume to an unsafe extreme.
+    final effectiveProfile =
+        (adaptation == null || adaptation.volumeBias == 0)
+        ? profile
+        : profile.copyWith(
+            intensityAdjustment:
+                (profile.intensityAdjustment + adaptation.volumeBias).clamp(
+                  -2,
+                  2,
+                ),
+          );
+
+    final filtered = _compatibleExercises(effectiveProfile, exercises);
+    // Never fall back to the unfiltered library — that would re-introduce the
+    // unsafe movements we just filtered out. An empty pool instead yields safe
+    // generic fallback exercises downstream.
+    final sourcePool = filtered;
+    final weeklyPlan = _buildWeeklyPlan(effectiveProfile, sourcePool);
     final todayIndex = DateTime.now().weekday - 1;
     final firstName = profile.name.trim().split(' ').first;
 
+    final baseInsight = _insight(effectiveProfile, sourcePool.length);
+    final insight = (adaptation != null && adaptation.note.isNotEmpty)
+        ? '$baseInsight ${adaptation.note}'
+        : baseInsight;
+
     return WorkoutRecommendation(
       greeting: '${_greetingForHour(DateTime.now().hour)}, $firstName',
-      weeklyFocus: _weeklyFocus(profile),
-      insight: _insight(profile, sourcePool.length),
+      weeklyFocus: _weeklyFocus(effectiveProfile),
+      insight: insight,
       weeklyPlan: weeklyPlan,
       todaysPlan: weeklyPlan[todayIndex],
     );
@@ -28,26 +53,99 @@ class WorkoutEngineService {
     UserModel profile,
     List<ExerciseDefinition> exercises,
   ) {
-    return exercises
-        .where((exercise) {
-          if (!_equipmentCompatible(
-            profile.availableEquipment,
-            exercise.equipment,
-          )) {
-            return false;
-          }
-          if (!_levelCompatible(profile.trainingLevel, exercise.level)) {
-            return false;
-          }
-          if (!_jointCompatible(profile.jointSensitivities, exercise)) {
-            return false;
-          }
-          if (!_injuryCompatible(profile.injuryNotes, exercise)) {
-            return false;
-          }
-          return true;
-        })
+    final preferred = exercises
+        .where(
+          (exercise) =>
+              _equipmentCompatible(
+                profile.availableEquipment,
+                exercise.equipment,
+              ) &&
+              _levelCompatible(profile.trainingLevel, exercise.level) &&
+              _isSafe(profile, exercise),
+        )
         .toList(growable: false);
+    if (preferred.isNotEmpty) {
+      return preferred;
+    }
+
+    // If nothing matches the user's equipment/level, relax THOSE — but never
+    // relax safety. Unsafe movements must never reach the plan.
+    return exercises
+        .where((exercise) => _isSafe(profile, exercise))
+        .toList(growable: false);
+  }
+
+  /// Hard safety gate. An exercise is only eligible if it clears the user's
+  /// joint sensitivities, free-text injuries, and medical/age constraints. This
+  /// runs before any scoring so unsafe movements can never be selected — e.g. a
+  /// 60-year-old with a heart stent and knee injury never sees running, jumps,
+  /// lunges, or plyometrics.
+  static bool _isSafe(UserModel profile, ExerciseDefinition exercise) {
+    // Hardest gate: vulnerable users (older, cardiac, knee/back-sensitive, or
+    // who asked to avoid impact) get NO high-impact or explosive work at all —
+    // blocked by exercise *category*, not just by name keywords, so plyometric
+    // drills like jumps, bounds, skips and "wheel run" can never slip through.
+    if (_avoidsHighImpact(profile) && _isHighImpactExercise(exercise)) {
+      return false;
+    }
+    return _jointCompatible(profile.jointSensitivities, exercise) &&
+        _injuryCompatible(profile.injuryNotes, exercise) &&
+        _medicalAndAgeCompatible(profile, exercise);
+  }
+
+  /// True when the user should be steered entirely away from high-impact and
+  /// explosive work: older trainees (55+), anyone with a cardiac note, knee or
+  /// lower-back sensitivities, or notes asking to avoid impact (jump/run/etc.).
+  /// Such users get strength, mobility, and low-impact conditioning only.
+  static bool _avoidsHighImpact(UserModel profile) {
+    final notes = profile.injuryNotes.toLowerCase();
+    final joints = profile.jointSensitivities.map(_normalize).toSet();
+    return profile.age >= 55 ||
+        _mentionsAny(notes, _cardiacConditionWords) ||
+        joints.contains('knees') ||
+        joints.contains('lower back') ||
+        _mentionsAny(notes, _impactAverseNoteWords);
+  }
+
+  /// Whether an exercise is high-impact / explosive by category or movement.
+  /// The free-exercise-db categories `plyometrics`, `strongman`, `powerlifting`
+  /// and `olympic weightlifting` are explosive or maximal by nature, so the
+  /// whole category is treated as high-impact regardless of the exercise name.
+  static bool _isHighImpactExercise(ExerciseDefinition exercise) {
+    final category = _normalize(exercise.category);
+    if (category == 'plyometrics' ||
+        category == 'strongman' ||
+        category == 'powerlifting' ||
+        category == 'olympic weightlifting') {
+      return true;
+    }
+    final text = _safetyText(exercise);
+    return _mentionsAny(text, _highImpactKeywords) ||
+        _mentionsAny(text, _highIntensityKeywords);
+  }
+
+  /// Blocks high-impact / high-intensity / maximal-effort work for users whose
+  /// free-text notes mention a cardiac or other serious condition, and blocks
+  /// high-impact (jump/plyometric) work for older trainees regardless of notes.
+  static bool _medicalAndAgeCompatible(
+    UserModel profile,
+    ExerciseDefinition exercise,
+  ) {
+    final text = _safetyText(exercise);
+    final notes = profile.injuryNotes.toLowerCase();
+
+    if (_mentionsAny(notes, _cardiacConditionWords) &&
+        _mentionsAny(text, _highIntensityKeywords)) {
+      return false;
+    }
+    if (_mentionsAny(notes, _herniaConditionWords) &&
+        _mentionsAny(text, _herniaRiskKeywords)) {
+      return false;
+    }
+    if (profile.age >= 58 && _mentionsAny(text, _highImpactKeywords)) {
+      return false;
+    }
+    return true;
   }
 
   /// Filters out exercises that touch a body part / movement the user flagged
@@ -61,13 +159,7 @@ class WorkoutEngineService {
       return true;
     }
 
-    final haystack =
-        '${exercise.name} '
-                '${exercise.instructions.join(' ')} '
-                '${exercise.primaryMuscles.join(' ')} '
-                '${exercise.secondaryMuscles.join(' ')} '
-                '${exercise.equipment} ${exercise.category}'
-            .toLowerCase();
+    final haystack = _safetyText(exercise);
 
     const stopWords = <String>{
       'avoid',
@@ -117,11 +209,59 @@ class WorkoutEngineService {
       final isMeaningful =
           (token.length >= 4 && !stopWords.contains(token)) ||
           shortBodyParts.contains(token);
-      if (isMeaningful && haystack.contains(token)) {
+      if (!isMeaningful) {
+        continue;
+      }
+      // Match the word and its verb stem so "running" blocks "run", "jumping"
+      // blocks "jump", etc. — exact substring matching missed these.
+      if (_mentionsAny(haystack, <String>{token, _stemIng(token)})) {
         return false;
       }
     }
     return true;
+  }
+
+  /// Text used for all safety matching: name, cues, muscles, and metadata.
+  static String _safetyText(ExerciseDefinition exercise) {
+    return ('${exercise.name} '
+            '${exercise.instructions.join(' ')} '
+            '${exercise.primaryMuscles.join(' ')} '
+            '${exercise.secondaryMuscles.join(' ')} '
+            '${exercise.category} ${exercise.force} ${exercise.equipment}')
+        .toLowerCase();
+  }
+
+  /// True if [text] mentions any [words]. Single words match at a word boundary
+  /// with any suffix (so "jump" hits "jumping"/"jumps" but "run" never hits
+  /// "trunk"); multi-word/hyphenated entries match as substrings.
+  static bool _mentionsAny(String text, Iterable<String> words) {
+    for (final raw in words) {
+      final word = raw.trim();
+      if (word.isEmpty) {
+        continue;
+      }
+      if (word.contains(' ') || word.contains('-')) {
+        if (text.contains(word)) {
+          return true;
+        }
+      } else if (RegExp('\\b${RegExp.escape(word)}\\w*').hasMatch(text)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Crude verb-stemmer for `-ing` forms, handling doubled final consonants:
+  /// running -> run, jumping -> jump, skipping -> skip, swimming -> swim.
+  static String _stemIng(String token) {
+    if (token.length > 5 && token.endsWith('ing')) {
+      var stem = token.substring(0, token.length - 3);
+      if (stem.length >= 3 && stem[stem.length - 1] == stem[stem.length - 2]) {
+        stem = stem.substring(0, stem.length - 1);
+      }
+      return stem;
+    }
+    return token;
   }
 
   static List<WorkoutDayPlan> _buildWeeklyPlan(
@@ -1016,7 +1156,7 @@ class WorkoutEngineService {
   }
 
   static int _coreSlotCount(UserModel profile, int exerciseCount) {
-    if (profile.hasTargetMuscleFocus('Core')) {
+    if (profile.hasTargetMuscleFocus('Abs')) {
       return exerciseCount >= 8 ? 2 : 1;
     }
     if (profile.hasTargetMuscleFocus('Back & Posture') ||
@@ -1553,27 +1693,89 @@ class WorkoutEngineService {
       return true;
     }
 
-    final haystack = '${exercise.name} ${exercise.instructions.join(' ')}'
-        .toLowerCase();
+    final text = _safetyText(exercise);
 
     if (sensitivities.contains('knees') &&
-        (haystack.contains('jump') || haystack.contains('sprint'))) {
+        _mentionsAny(text, _kneeRiskKeywords)) {
       return false;
     }
     if (sensitivities.contains('lower back') &&
-        (haystack.contains('good morning') ||
-            haystack.contains('maximal') ||
-            haystack.contains('heavy'))) {
+        _mentionsAny(text, _lowerBackRiskKeywords)) {
       return false;
     }
     if (sensitivities.contains('shoulders') &&
-        (haystack.contains('upright row') ||
-            haystack.contains('behind the neck'))) {
+        _mentionsAny(text, _shoulderRiskKeywords)) {
       return false;
     }
 
     return true;
   }
+
+  // ---- Safety keyword lists ----------------------------------------------
+  // Single entries match at a word boundary with any suffix (see _mentionsAny);
+  // multi-word entries match as substrings.
+
+  /// Impact + deep-knee-loading movements unsafe for sensitive knees.
+  static const Set<String> _kneeRiskKeywords = <String>{
+    'jump', 'hop', 'skip', 'sprint', 'run', 'jog', 'lunge', 'bound', 'leap',
+    'plyo', 'plyometric', 'burpee', 'pistol', 'jump squat', 'squat jump',
+    'box jump', 'tuck jump', 'depth jump', 'jumping jack', 'high knee',
+    'mountain climber', 'knee circle', 'kneel', 'split squat', 'skater',
+    'jump rope', 'stair', 'step-up', 'step up',
+  };
+
+  /// Spinal-loading / flexion-under-load movements unsafe for a sensitive back.
+  static const Set<String> _lowerBackRiskKeywords = <String>{
+    'deadlift', 'good morning', 'sit-up', 'situp', 'toe touch', 'superman',
+    'russian twist', 'twist', 'back extension', 'hyperextension', 'clean',
+    'snatch', 'jerk', 'windmill', 'heavy', 'maximal',
+  };
+
+  /// Overhead / end-range movements unsafe for sensitive shoulders.
+  static const Set<String> _shoulderRiskKeywords = <String>{
+    'overhead', 'behind the neck', 'behind neck', 'upright row',
+    'military press', 'shoulder press', 'push press', 'snatch', 'jerk',
+    'handstand', 'dip', 'pull-up', 'pull up',
+  };
+
+  /// Words in a user's notes that signal a cardiac / serious condition.
+  static const Set<String> _cardiacConditionWords = <String>{
+    'heart', 'stent', 'cardiac', 'bypass', 'angina', 'stroke', 'pacemaker',
+    'hypertension', 'blood pressure', 'arrhythmia', 'palpitation',
+  };
+
+  /// Note words that signal the user wants to avoid impact / explosive work.
+  /// Their presence flips the user into the low-impact-only track.
+  static const Set<String> _impactAverseNoteWords = <String>{
+    'jump', 'jumping', 'run', 'running', 'jog', 'jogging', 'sprint', 'hop',
+    'skip', 'skipping', 'impact', 'high impact', 'plyo', 'plyometric',
+    'bound', 'leap', 'knee', 'knees', 'heart', 'stent', 'cardiac',
+  };
+
+  /// High-intensity / maximal-effort work unsafe with a cardiac condition.
+  static const Set<String> _highIntensityKeywords = <String>{
+    'jump', 'hop', 'skip', 'sprint', 'run', 'jog', 'plyo', 'plyometric',
+    'burpee', 'bound', 'leap', 'box jump', 'jumping jack', 'high knee',
+    'mountain climber', 'hiit', 'interval', 'maximal', 'max effort',
+    'explosive', 'power clean', 'clean and jerk', 'snatch', 'jerk', 'thruster',
+    'to failure', 'all out',
+  };
+
+  /// Words in a user's notes that signal a hernia.
+  static const Set<String> _herniaConditionWords = <String>{'hernia'};
+
+  /// Intra-abdominal-pressure / straining movements unsafe with a hernia.
+  static const Set<String> _herniaRiskKeywords = <String>{
+    'sit-up', 'situp', 'crunch', 'leg raise', 'deadlift', 'heavy', 'maximal',
+    'valsalva', 'plank', 'v-up', 'hollow', 'toes to bar',
+  };
+
+  /// High-impact / plyometric movements steered away from for older trainees.
+  static const Set<String> _highImpactKeywords = <String>{
+    'jump', 'hop', 'skip', 'sprint', 'plyo', 'plyometric', 'burpee', 'bound',
+    'leap', 'box jump', 'tuck jump', 'depth jump', 'jumping jack', 'high knee',
+    'mountain climber', 'skater', 'jump rope', 'jump squat', 'squat jump',
+  };
 
   static List<String> _focusMusclesForProfile(
     UserModel profile, {
@@ -1612,7 +1814,7 @@ class WorkoutEngineService {
                 : const ['quadriceps', 'gluteus maximus', 'hamstrings'],
           );
           break;
-        case 'Core':
+        case 'Abs':
           focusMuscles.addAll(
             strongFocus
                 ? const ['abdominals', 'obliques', 'lower back']
@@ -1828,8 +2030,8 @@ class WorkoutEngineService {
           return 'Upper Body Focus';
         case 'Lower Body':
           return 'Lower Body Focus';
-        case 'Core':
-          return 'Core Stability Focus';
+        case 'Abs':
+          return 'Abs & Core Focus';
         case 'Back & Posture':
           return 'Back + Posture Focus';
         default:
@@ -1851,7 +2053,7 @@ class WorkoutEngineService {
           (focusArea) => switch (focusArea) {
             'Upper Body' => 'upper-body',
             'Lower Body' => 'lower-body',
-            'Core' => 'trunk and posture',
+            'Abs' => 'trunk and posture',
             'Back & Posture' => 'posture-supportive back',
             _ => _normalize(focusArea),
           },

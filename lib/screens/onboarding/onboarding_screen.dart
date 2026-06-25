@@ -6,7 +6,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/dietary_preferences.dart';
+import '../../utils/regions.dart';
 import '../../widgets/dark_mode_toggle.dart';
+import '../../widgets/user_avatar.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -19,6 +21,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _injuryController = TextEditingController();
+  final TextEditingController _stateSearchController = TextEditingController();
   late final FixedExtentScrollController _ageController;
   late final FixedExtentScrollController _heightController;
   late final FixedExtentScrollController _weightController;
@@ -27,12 +30,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentIndex = 0;
   bool _isSaving = false;
 
+  String _avatarKey = 'person';
+  String _avatarImage = '';
   String? _gender;
   int _age = 25;
   double _height = 170;
   double _weight = 70;
   double _targetWeight = 70;
-  String _dietaryPreference = DietaryPreferenceCodes.mixed;
+  String? _dietaryPreference;
+  String? _country;
+  String? _state;
   String? _occupation;
   String? _sittingHours;
   String? _fitnessGoal;
@@ -41,12 +48,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _workoutLocation;
   String? _availableEquipment;
   int? _sessionDurationMinutes;
-  Set<String> _targetMuscleFocuses = <String>{
-    UserModel.defaultTargetMuscleFocus,
-  };
-  Set<String> _jointSensitivities = <String>{UserModel.defaultJointSensitivity};
+  Set<String> _targetMuscleFocuses = <String>{};
+  Set<String> _jointSensitivities = <String>{};
 
-  static const int _totalQuestions = 18;
+  static const int _totalQuestions = 20;
 
   @override
   void initState() {
@@ -99,7 +104,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _occupation == null ||
         _sittingHours == null ||
         _fitnessGoal == null ||
-        _workoutDays == null) {
+        _workoutDays == null ||
+        _country == null ||
+        _state == null) {
       return;
     }
 
@@ -116,9 +123,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         sittingHours: _sittingHours!,
         fitnessGoal: _fitnessGoal!,
         workoutDays: _workoutDays!,
+        avatarKey: _avatarKey,
+        avatarImage: _avatarImage,
         height: _height,
         targetWeight: _targetWeight,
-        dietaryPreference: _dietaryPreference,
+        dietaryPreference:
+            _dietaryPreference ?? DietaryPreferenceCodes.mixed,
+        country: _country ?? Countries.india,
+        state: _state ?? '',
         injuryNotes: _injuryController.text.trim(),
         trainingLevel: _trainingLevel ?? 'Beginner',
         workoutLocation: _workoutLocation ?? 'Home',
@@ -150,6 +162,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _pageController.dispose();
     _nameController.dispose();
     _injuryController.dispose();
+    _stateSearchController.dispose();
     _ageController.dispose();
     _heightController.dispose();
     _weightController.dispose();
@@ -342,7 +355,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       title: 'How do you prefer to eat?',
                       subtitle:
                           'This shapes your weekly diet plan so meal suggestions match what you actually eat.',
-                      selectedValue: dietaryPreferenceLabel(_dietaryPreference),
+                      selectedValue: _dietaryPreference == null
+                          ? null
+                          : dietaryPreferenceLabel(_dietaryPreference!),
                       options: const [
                         _ChoiceOption(
                           'Vegetarian',
@@ -366,6 +381,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                     ),
+                    _buildChoiceQuestion(
+                      context,
+                      title: 'Which country do you live in?',
+                      subtitle:
+                          'We build your diet plan from the cuisine of your country so meals feel familiar.',
+                      selectedValue: _country,
+                      options: const [
+                        _ChoiceOption('India', '🇮🇳'),
+                        _ChoiceOption('United States', '🇺🇸'),
+                        _ChoiceOption('United Kingdom', '🇬🇧'),
+                        _ChoiceOption('Australia', '🇦🇺'),
+                        _ChoiceOption('Canada', '🇨🇦'),
+                      ],
+                      onSelected: (value) => setState(() {
+                        if (_country != value) {
+                          _country = value;
+                          _state = null;
+                          _stateSearchController.clear();
+                        }
+                      }),
+                    ),
+                    _buildStateQuestion(context),
                     _buildChoiceQuestion(
                       context,
                       title: 'What is your current training level?',
@@ -465,7 +502,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _ChoiceOption('Full Body', '🧍'),
                         _ChoiceOption('Upper Body', '💪'),
                         _ChoiceOption('Lower Body', '🦵'),
-                        _ChoiceOption('Core', '⚙'),
+                        _ChoiceOption('Abs', '🔥'),
                         _ChoiceOption('Back & Posture', '🧠'),
                       ],
                       onToggled: (value) => setState(() {
@@ -601,6 +638,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'CHOOSE A PROFILE PICTURE',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildAvatarPicker(context),
+                  const SizedBox(height: 24),
                   Container(
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -630,7 +679,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'We will show this on the workout page, greetings, and progress areas.',
+                    'We will show your name and picture on the workout page, greetings, and progress areas. You can change them anytime in Profile.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -640,6 +689,179 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Future<void> _pickOnboardingAvatar() async {
+    final selection = await showAvatarPickerSheet(
+      context,
+      currentKey: _avatarImage.isEmpty ? _avatarKey : null,
+    );
+    if (selection == null) return;
+    setState(() {
+      if (selection.avatarImage != null) {
+        _avatarImage = selection.avatarImage!;
+      } else if (selection.avatarKey != null) {
+        _avatarKey = selection.avatarKey!;
+        _avatarImage = '';
+      }
+    });
+  }
+
+  Widget _buildAvatarPicker(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: _pickOnboardingAvatar,
+          child: Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              UserAvatar(
+                avatarKey: _avatarKey,
+                avatarImage: _avatarImage,
+                radius: 36,
+              ),
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryContainer,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: colorScheme.surface, width: 2),
+                ),
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  size: 14,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _pickOnboardingAvatar,
+            icon: const Icon(Icons.add_a_photo_outlined, size: 18),
+            label: const Text('Upload photo or pick avatar'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStateQuestion(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final query = _stateSearchController.text.trim().toLowerCase();
+    final states = statesForCountry(_country ?? Countries.india);
+    final matches = states
+        .where((s) => query.isEmpty || s.toLowerCase().contains(query))
+        .toList(growable: false);
+    final regionWord = _country == Countries.canada
+        ? 'province'
+        : (_country == Countries.uk ? 'region' : 'state');
+
+    return _buildQuestionScaffold(
+      context: context,
+      title: 'Which $regionWord do you live in?',
+      subtitle:
+          'We tailor your diet plan to dishes common in your region, so meals feel local and familiar.',
+      canContinue: _state != null,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: TextField(
+              controller: _stateSearchController,
+              textInputAction: TextInputAction.search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search your $regionWord',
+                prefixIcon: const Icon(Icons.search),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: matches.isEmpty
+                ? Center(
+                    child: Text(
+                      'No matching state',
+                      style: TextStyle(color: colorScheme.onSurfaceVariant),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: matches.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final stateName = matches[index];
+                      final isSelected = _state == stateName;
+                      return GestureDetector(
+                        onTap: () {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          setState(() => _state = stateName);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppTheme.primaryContainer.withOpacity(0.06)
+                                : colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border(
+                              left: BorderSide(
+                                color: isSelected
+                                    ? AppTheme.primaryContainer
+                                    : Colors.transparent,
+                                width: 4,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  stateName,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                    color: colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppTheme.primaryContainer,
+                                  size: 22,
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }

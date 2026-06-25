@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../models/exercise_library_models.dart';
 import '../models/user_model.dart';
+import '../models/workout_adaptation.dart';
+import '../models/workout_log_models.dart';
 import '../models/workout_plan.dart';
 import '../services/analytics_service.dart';
 import '../services/exercise_library_service.dart';
@@ -18,6 +20,7 @@ class WorkoutProvider extends ChangeNotifier {
   final ExerciseLibraryService _library = ExerciseLibraryService.instance;
 
   UserModel? _profile;
+  List<WorkoutSetLog> _logs = const <WorkoutSetLog>[];
   WorkoutRecommendation? _recommendation;
   bool _loading = false;
   String? _error;
@@ -52,18 +55,32 @@ class WorkoutProvider extends ChangeNotifier {
     await _rebuildRecommendation();
   }
 
-  Future<void> sync(UserModel? profile) async {
-    final nextProfileSignature = _buildProfileSignature(profile);
-    final profileChanged = nextProfileSignature != _profileSignature;
+  Future<void> sync(
+    UserModel? profile, [
+    List<WorkoutSetLog> logs = const <WorkoutSetLog>[],
+  ]) async {
+    final nextSignature = _buildProfileSignature(profile, logs);
+    // Clear (and show a loading state) only when the *profile* changes; when
+    // just the logs change we recompute quietly so the dashboard never flashes.
+    final profileChanged =
+        _signatureProfilePart(nextSignature) !=
+        _signatureProfilePart(_profileSignature);
+    final anythingChanged = nextSignature != _profileSignature;
     _profile = profile;
-    _profileSignature = nextProfileSignature;
+    _logs = logs;
+    _profileSignature = nextSignature;
 
-    if (!profileChanged &&
+    if (!anythingChanged &&
         (_loading || _recommendation != null || _profile == null)) {
       return;
     }
 
     await _rebuildRecommendation(clearCurrent: profileChanged);
+  }
+
+  String _signatureProfilePart(String signature) {
+    final idx = signature.indexOf('##logs:');
+    return idx < 0 ? signature : signature.substring(0, idx);
   }
 
   /// Rebuilds the plan. [clearCurrent] false keeps the existing plan on screen
@@ -72,7 +89,7 @@ class WorkoutProvider extends ChangeNotifier {
   Future<void> refresh({UserModel? profile, bool clearCurrent = true}) async {
     if (profile != null || _profile != null) {
       _profile = profile ?? _profile;
-      _profileSignature = _buildProfileSignature(_profile);
+      _profileSignature = _buildProfileSignature(_profile, _logs);
     }
     await _rebuildRecommendation(clearCurrent: clearCurrent);
   }
@@ -105,9 +122,15 @@ class WorkoutProvider extends ChangeNotifier {
       WorkoutRecommendation? nextRecommendation;
       String? nextError;
       if (_profile != null && _library.exercises.isNotEmpty) {
+        final adaptation = WorkoutAdaptation.from(
+          profile: _profile!,
+          logs: _logs,
+          now: DateTime.now(),
+        );
         nextRecommendation = await _buildRecommendationOffThread(
           _profile!,
           _library.exercises,
+          adaptation,
         );
         nextError = _library.error;
       } else {
@@ -145,17 +168,19 @@ class WorkoutProvider extends ChangeNotifier {
   Future<WorkoutRecommendation> _buildRecommendationOffThread(
     UserModel profile,
     List<ExerciseDefinition> exercises,
+    WorkoutAdaptation adaptation,
   ) async {
     try {
       return await compute(
         _computeRecommendation,
-        _RecommendationParams(profile, exercises),
+        _RecommendationParams(profile, exercises, adaptation),
       );
     } catch (error) {
       debugPrint('Recommendation isolate failed, computing inline: $error');
       return WorkoutEngineService.buildRecommendation(
         profile: profile,
         exercises: exercises,
+        adaptation: adaptation,
       );
     }
   }
@@ -187,12 +212,12 @@ class WorkoutProvider extends ChangeNotifier {
     _lastHasExercises = _library.hasExercises;
   }
 
-  String _buildProfileSignature(UserModel? profile) {
+  String _buildProfileSignature(UserModel? profile, List<WorkoutSetLog> logs) {
     if (profile == null) {
       return '';
     }
 
-    return [
+    final profilePart = [
       profile.id,
       profile.name,
       profile.fitnessGoal,
@@ -212,7 +237,17 @@ class WorkoutProvider extends ChangeNotifier {
       profile.gender,
       profile.injuryNotes,
       profile.intensityAdjustment.toString(),
+      // Streak + recency feed the adaptive engine, so changes must rebuild.
+      profile.streak.toString(),
+      profile.workoutCompletionDates.length.toString(),
     ].join('|');
+
+    // Logs only nudge weight suggestions / volume, so they live after a marker
+    // that lets us detect a logs-only change and avoid a loading flash.
+    final logsPart = logs.isEmpty
+        ? '0:0'
+        : '${logs.length}:${logs.last.timestampMillis}';
+    return '$profilePart##logs:$logsPart';
   }
 
   @override
@@ -226,8 +261,9 @@ class WorkoutProvider extends ChangeNotifier {
 class _RecommendationParams {
   final UserModel profile;
   final List<ExerciseDefinition> exercises;
+  final WorkoutAdaptation adaptation;
 
-  const _RecommendationParams(this.profile, this.exercises);
+  const _RecommendationParams(this.profile, this.exercises, this.adaptation);
 }
 
 /// Top-level isolate entry point (required by `compute`).
@@ -235,5 +271,6 @@ WorkoutRecommendation _computeRecommendation(_RecommendationParams params) {
   return WorkoutEngineService.buildRecommendation(
     profile: params.profile,
     exercises: params.exercises,
+    adaptation: params.adaptation,
   );
 }

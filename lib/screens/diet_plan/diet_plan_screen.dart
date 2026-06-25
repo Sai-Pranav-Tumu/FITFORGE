@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/diet_plan_models.dart';
 import '../../providers/diet_plan_provider.dart';
 import '../../providers/user_provider.dart';
+import '../../services/diet_recommender_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/top_app_bar.dart';
 
@@ -16,11 +17,19 @@ class DietPlanScreen extends StatefulWidget {
 
 class _DietPlanScreenState extends State<DietPlanScreen> {
   int _selectedDay = DateTime.now().weekday - 1;
+  bool _modelActive = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoad());
+    _refreshScorerStatus();
+  }
+
+  Future<void> _refreshScorerStatus() async {
+    await DietRecommenderModel.instance.ensureLoaded();
+    if (!mounted) return;
+    setState(() => _modelActive = DietRecommenderModel.instance.isAvailable);
   }
 
   Future<void> _maybeLoad() async {
@@ -116,6 +125,11 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _ScorerBadge(modelActive: _modelActive),
+          ),
+          const SizedBox(height: 10),
           _TdeeHeader(tdee: plan.tdee),
           const SizedBox(height: 14),
           _DaySelector(
@@ -217,6 +231,45 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       'Dec',
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+}
+
+class _ScorerBadge extends StatelessWidget {
+  final bool modelActive;
+
+  const _ScorerBadge({required this.modelActive});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = modelActive ? AppTheme.tertiary : AppTheme.secondaryContainer;
+    final label = modelActive ? 'AI model active' : 'Smart heuristic';
+    final icon = modelActive
+        ? Icons.auto_awesome_rounded
+        : Icons.tune_rounded;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: color,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -404,15 +457,33 @@ class _MealCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      food.foodName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          food.foodName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        if (food.portionLabel.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            food.portionLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${food.quantityGrams.toStringAsFixed(0)}g',
+                    '${food.calories.toStringAsFixed(0)} kcal',
                     style: TextStyle(color: colorScheme.onSurfaceVariant),
                   ),
                 ],

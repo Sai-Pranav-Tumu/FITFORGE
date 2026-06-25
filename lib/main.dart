@@ -71,19 +71,25 @@ void main() async {
             return provider;
           },
         ),
-        ChangeNotifierProxyProvider<UserProvider, WorkoutProvider>(
-          create: (_) => WorkoutProvider(),
-          update: (_, userProvider, workoutProvider) {
-            final provider = workoutProvider ?? WorkoutProvider();
-            provider.sync(userProvider.userProfile);
-            return provider;
-          },
-        ),
+        // Declared before WorkoutProvider so the latter can read logged sets to
+        // adapt the plan to the user's actual performance.
         ChangeNotifierProxyProvider<AuthProvider, WorkoutLogProvider>(
           create: (_) => WorkoutLogProvider(),
           update: (_, authProvider, workoutLogProvider) {
             final provider = workoutLogProvider ?? WorkoutLogProvider();
             provider.sync(authProvider.user?.uid);
+            return provider;
+          },
+        ),
+        ChangeNotifierProxyProvider2<
+          UserProvider,
+          WorkoutLogProvider,
+          WorkoutProvider
+        >(
+          create: (_) => WorkoutProvider(),
+          update: (_, userProvider, workoutLogProvider, workoutProvider) {
+            final provider = workoutProvider ?? WorkoutProvider();
+            provider.sync(userProvider.userProfile, workoutLogProvider.logs);
             return provider;
           },
         ),
