@@ -21,7 +21,8 @@ class WorkoutHistoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final logProvider = context.watch<WorkoutLogProvider>();
-    final isPremium = context.watch<EntitlementService>().isPremium;
+    // Full history + progression charts are a Pro feature.
+    final isPremium = context.watch<EntitlementService>().hasPro;
     final summaries = logProvider.summaries();
 
     if (summaries.isEmpty) {

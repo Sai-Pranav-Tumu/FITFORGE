@@ -21,6 +21,7 @@ class WorkoutProvider extends ChangeNotifier {
 
   UserModel? _profile;
   List<WorkoutSetLog> _logs = const <WorkoutSetLog>[];
+  bool _hasPro = true;
   WorkoutRecommendation? _recommendation;
   bool _loading = false;
   String? _error;
@@ -58,8 +59,10 @@ class WorkoutProvider extends ChangeNotifier {
   Future<void> sync(
     UserModel? profile, [
     List<WorkoutSetLog> logs = const <WorkoutSetLog>[],
+    bool hasPro = true,
   ]) async {
-    final nextSignature = _buildProfileSignature(profile, logs);
+    _hasPro = hasPro;
+    final nextSignature = _buildProfileSignature(profile, logs, hasPro);
     // Clear (and show a loading state) only when the *profile* changes; when
     // just the logs change we recompute quietly so the dashboard never flashes.
     final profileChanged =
@@ -89,7 +92,7 @@ class WorkoutProvider extends ChangeNotifier {
   Future<void> refresh({UserModel? profile, bool clearCurrent = true}) async {
     if (profile != null || _profile != null) {
       _profile = profile ?? _profile;
-      _profileSignature = _buildProfileSignature(_profile, _logs);
+      _profileSignature = _buildProfileSignature(_profile, _logs, _hasPro);
     }
     await _rebuildRecommendation(clearCurrent: clearCurrent);
   }
@@ -122,13 +125,21 @@ class WorkoutProvider extends ChangeNotifier {
       WorkoutRecommendation? nextRecommendation;
       String? nextError;
       if (_profile != null && _library.exercises.isNotEmpty) {
-        final adaptation = WorkoutAdaptation.from(
-          profile: _profile!,
-          logs: _logs,
-          now: DateTime.now(),
-        );
+        final base = _profile!;
+        // Tier gating: Free is capped at 3 training days/week and gets a static
+        // plan; Pro/Max unlock full frequency and the adaptive engine.
+        final tieredProfile = _hasPro
+            ? base
+            : base.copyWith(workoutDays: base.workoutDays.clamp(1, 3));
+        final adaptation = _hasPro
+            ? WorkoutAdaptation.from(
+                profile: base,
+                logs: _logs,
+                now: DateTime.now(),
+              )
+            : WorkoutAdaptation.neutral;
         nextRecommendation = await _buildRecommendationOffThread(
-          _profile!,
+          tieredProfile,
           _library.exercises,
           adaptation,
         );
@@ -212,12 +223,17 @@ class WorkoutProvider extends ChangeNotifier {
     _lastHasExercises = _library.hasExercises;
   }
 
-  String _buildProfileSignature(UserModel? profile, List<WorkoutSetLog> logs) {
+  String _buildProfileSignature(
+    UserModel? profile,
+    List<WorkoutSetLog> logs,
+    bool hasPro,
+  ) {
     if (profile == null) {
       return '';
     }
 
     final profilePart = [
+      hasPro ? 'pro' : 'free',
       profile.id,
       profile.name,
       profile.fitnessGoal,

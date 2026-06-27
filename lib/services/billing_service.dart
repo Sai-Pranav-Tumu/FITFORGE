@@ -18,9 +18,24 @@ class BillingService extends ChangeNotifier {
 
   /// Configure these to match the subscription products you create in the
   /// Play Console (and App Store Connect for iOS).
-  static const String monthlyId = 'fitforge_premium_monthly';
-  static const String yearlyId = 'fitforge_premium_yearly';
-  static const Set<String> _productIds = {monthlyId, yearlyId};
+  static const String proMonthlyId = 'pro_monthly';
+  static const String proYearlyId = 'pro_yearly';
+  static const String maxMonthlyId = 'max_monthly';
+  static const String maxYearlyId = 'max_yearly';
+
+  /// Legacy single-premium products, kept so existing subscribers can still
+  /// restore (they map to Pro).
+  static const String legacyMonthlyId = 'fitforge_premium_monthly';
+  static const String legacyYearlyId = 'fitforge_premium_yearly';
+
+  static const Set<String> _productIds = {
+    proMonthlyId,
+    proYearlyId,
+    maxMonthlyId,
+    maxYearlyId,
+    legacyMonthlyId,
+    legacyYearlyId,
+  };
 
   final InAppPurchase _iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
@@ -144,18 +159,27 @@ class BillingService extends ChangeNotifier {
         'purchaseToken': token,
       });
       final data = result.data;
-      final granted = data is Map && data['isPremium'] == true;
-      await EntitlementService.instance.applyVerifiedEntitlement(granted);
+      final active = data is Map && (data['isPremium'] == true);
+      final tierName = data is Map ? data['tier'] as String? : null;
+      // Prefer the server's tier; fall back to the product id's implied tier.
+      final tier = active
+          ? (tierName != null
+                ? tierFromName(tierName)
+                : tierFromProductId(purchase.productID))
+          : AppTier.free;
+      await EntitlementService.instance.applyVerifiedTier(tier);
       AnalyticsService.instance.log('premium_verified', {
         'product': purchase.productID,
-        'granted': granted,
+        'tier': tier.name,
       });
     } catch (error) {
       // Verification unavailable (e.g. function not deployed yet, transient
-      // network error). Grant locally so a paying user isn't blocked; the
-      // server reconciles on the next restore/RTDN.
+      // network error). Grant the product's tier locally so a paying user isn't
+      // blocked; the server reconciles on the next restore/RTDN.
       debugPrint('Server verification failed, granting locally: $error');
-      await EntitlementService.instance.setPremium(true);
+      await EntitlementService.instance.setTier(
+        tierFromProductId(purchase.productID),
+      );
       AnalyticsService.instance.log('premium_verify_fallback', {
         'product': purchase.productID,
       });

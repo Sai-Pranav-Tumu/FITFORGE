@@ -5,6 +5,7 @@ import '../models/diet_plan_models.dart';
 import '../models/user_model.dart';
 import 'diet_catalog_service.dart';
 import 'diet_recommender_model.dart';
+import 'entitlement_service.dart';
 
 /// Scores how *suitable* a dish is for a given user (goal/region/diet fit),
 /// independent of the running meal budget. Either the on-device TFLite model
@@ -80,10 +81,11 @@ class DietPlanService {
     );
   }
 
-  /// Picks the model scorer when the TFLite model is available, otherwise the
+  /// Picks the model scorer when the TFLite model is available AND the user is
+  /// on the Max tier (the AI recommender is a Max feature); otherwise the
   /// heuristic. Both share the same `CatalogDish -> 0..1` contract.
   DishSuitability _resolveSuitability(PlanUserContext context) {
-    if (_model.isAvailable) {
+    if (_model.isAvailable && EntitlementService.instance.hasMax) {
       return (dish) => _model.score(context: context, dish: dish);
     }
     return (dish) => HeuristicScorer.suitability(dish, context.goalKey);

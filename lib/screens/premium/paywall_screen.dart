@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:provider/provider.dart';
@@ -6,30 +7,30 @@ import '../../services/billing_service.dart';
 import '../../services/entitlement_service.dart';
 import '../../theme/app_theme.dart';
 
-class PaywallScreen extends StatelessWidget {
+class PaywallScreen extends StatefulWidget {
   const PaywallScreen({super.key});
 
-  static const _benefits = <({IconData icon, String title, String sub})>[
-    (
-      icon: Icons.insights_rounded,
-      title: 'Progression analytics',
-      sub: 'Strength charts, estimated 1RM trends, and personal records.',
-    ),
-    (
-      icon: Icons.auto_awesome_rounded,
-      title: 'Unlimited plan refreshes',
-      sub: 'Regenerate workouts and swap diet meals as often as you like.',
-    ),
-    (
-      icon: Icons.notifications_active_rounded,
-      title: 'Smart reminders',
-      sub: 'Workout-day nudges and streak-saver alerts tuned to your schedule.',
-    ),
-    (
-      icon: Icons.favorite_rounded,
-      title: 'Support development',
-      sub: 'Help us keep building and ship new features faster.',
-    ),
+  @override
+  State<PaywallScreen> createState() => _PaywallScreenState();
+}
+
+class _PaywallScreenState extends State<PaywallScreen> {
+  bool _yearly = true;
+
+  static const List<String> _proFeatures = [
+    'Full 800+ exercise library with animated guides',
+    'Adaptive engine — progressive overload & volume tuning',
+    'All regions & cuisines, unlimited diet swaps & regens',
+    'Full workout history + progress & strength charts',
+    'Custom reminders · No ads',
+  ];
+
+  static const List<String> _maxFeatures = [
+    'Everything in Pro, plus:',
+    'AI diet recommender — the smartest, model-ranked plans',
+    '1RM & volume analytics + CSV/PDF export',
+    'Early access to new features + priority support',
+    'Unlimited everything — no caps anywhere',
   ];
 
   @override
@@ -38,7 +39,7 @@ class PaywallScreen extends StatelessWidget {
     final entitlement = context.watch<EntitlementService>();
     final billing = context.watch<BillingService>();
 
-    // Auto-close once entitlement is granted (after a successful purchase).
+    // Auto-close once any paid tier is granted (after a successful purchase).
     if (entitlement.isPremium) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final navigator = Navigator.of(context);
@@ -46,195 +47,286 @@ class PaywallScreen extends StatelessWidget {
       });
     }
 
+    final proId = _yearly
+        ? BillingService.proYearlyId
+        : BillingService.proMonthlyId;
+    final maxId = _yearly
+        ? BillingService.maxYearlyId
+        : BillingService.maxMonthlyId;
+    final proProduct = billing.productById(proId);
+    final maxProduct = billing.productById(maxId);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('FitForge Premium')),
+      appBar: AppBar(title: const Text('Upgrade FitForge')),
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
           children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppTheme.primaryContainer, AppTheme.tertiary],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.workspace_premium_rounded,
-                          color: Colors.white,
-                          size: 36,
-                        ),
-                        SizedBox(height: 12),
-                        Text(
-                          'Train smarter with Premium',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Unlock analytics, unlimited plans, and smart reminders.',
-                          style: TextStyle(color: Colors.white, height: 1.35),
-                        ),
-                      ],
-                    ),
+            Text(
+              'Train smarter. Eat better.',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Pick the plan that fits your goals. Cancel anytime.',
+              style: TextStyle(color: colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            _BillingPeriodToggle(
+              yearly: _yearly,
+              onChanged: (v) => setState(() => _yearly = v),
+            ),
+            const SizedBox(height: 18),
+            _TierCard(
+              title: 'Pro',
+              tagline: 'The complete FitForge experience',
+              accent: AppTheme.primaryContainer,
+              features: _proFeatures,
+              priceLabel: _priceLabel(proProduct),
+              isCurrent: entitlement.tier == AppTier.pro,
+              highlighted: false,
+              onBuy: proProduct == null || billing.purchasePending
+                  ? null
+                  : () => billing.buy(proProduct),
+              onDevUnlock: kDebugMode
+                  ? () => context.read<EntitlementService>().setTier(AppTier.pro)
+                  : null,
+            ),
+            const SizedBox(height: 14),
+            _TierCard(
+              title: 'Max',
+              tagline: 'Ultimate access — every feature, no caps',
+              accent: AppTheme.secondary,
+              features: _maxFeatures,
+              priceLabel: _priceLabel(maxProduct),
+              isCurrent: entitlement.tier == AppTier.max,
+              highlighted: true,
+              onBuy: maxProduct == null || billing.purchasePending
+                  ? null
+                  : () => billing.buy(maxProduct),
+              onDevUnlock: kDebugMode
+                  ? () => context.read<EntitlementService>().setTier(AppTier.max)
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            if (billing.error != null)
+              Text(
+                billing.error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colorScheme.error, fontSize: 12),
+              ),
+            if (!billing.isAvailable ||
+                (proProduct == null && maxProduct == null))
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  billing.isAvailable
+                      ? 'Subscription products appear here once configured in the Play Console.'
+                      : 'In-app purchases aren’t available on this device.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 12,
                   ),
-                  const SizedBox(height: 20),
-                  ..._benefits.map(
-                    (b) => Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryContainer.withValues(
-                                alpha: 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              b.icon,
-                              color: AppTheme.primaryContainer,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  b.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  b.sub,
-                                  style: TextStyle(
-                                    color: colorScheme.onSurfaceVariant,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (billing.error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      billing.error!,
-                      style: TextStyle(color: colorScheme.error, fontSize: 12),
-                    ),
-                  ],
-                ],
+                ),
+              ),
+            const SizedBox(height: 4),
+            const _PaymentMethodsNote(),
+            Center(
+              child: TextButton(
+                onPressed: () => billing.restore(),
+                child: const Text('Restore purchase'),
               ),
             ),
-            _PurchaseActions(billing: billing),
           ],
         ),
       ),
     );
   }
+
+  String _priceLabel(ProductDetails? product) {
+    if (product == null) return '—';
+    return '${product.price} / ${_yearly ? 'year' : 'month'}';
+  }
 }
 
-class _PurchaseActions extends StatelessWidget {
-  final BillingService billing;
+class _BillingPeriodToggle extends StatelessWidget {
+  const _BillingPeriodToggle({required this.yearly, required this.onChanged});
 
-  const _PurchaseActions({required this.billing});
+  final bool yearly;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-
-    Widget productButton(ProductDetails product, {bool primary = true}) {
-      final label = '${product.title.split('(').first.trim()} · ${product.price}';
-      final child = billing.purchasePending
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : Text(label);
-      return SizedBox(
-        width: double.infinity,
-        child: primary
-            ? FilledButton(
-                onPressed: billing.purchasePending
-                    ? null
-                    : () => billing.buy(product),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: child,
-              )
-            : OutlinedButton(
-                onPressed: billing.purchasePending
-                    ? null
-                    : () => billing.buy(product),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: child,
+    Widget seg(String label, bool selected, VoidCallback onTap) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppTheme.primaryContainer
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: selected ? Colors.white : colorScheme.onSurfaceVariant,
               ),
+            ),
+          ),
+        ),
       );
     }
 
-    final yearly = billing.productById(BillingService.yearlyId);
-    final monthly = billing.productById(BillingService.monthlyId);
-    final hasProducts = yearly != null || monthly != null;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
         children: [
-          if (billing.isAvailable && hasProducts) ...[
-            if (yearly != null) productButton(yearly),
-            if (yearly != null && monthly != null) const SizedBox(height: 10),
-            if (monthly != null) productButton(monthly, primary: yearly == null),
-            const SizedBox(height: 8),
-            const _PaymentMethodsNote(),
-            TextButton(
-              onPressed: () => billing.restore(),
-              child: const Text('Restore purchase'),
+          seg('Monthly', !yearly, () => onChanged(false)),
+          seg('Yearly · save more', yearly, () => onChanged(true)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TierCard extends StatelessWidget {
+  const _TierCard({
+    required this.title,
+    required this.tagline,
+    required this.accent,
+    required this.features,
+    required this.priceLabel,
+    required this.isCurrent,
+    required this.highlighted,
+    required this.onBuy,
+    required this.onDevUnlock,
+  });
+
+  final String title;
+  final String tagline;
+  final Color accent;
+  final List<String> features;
+  final String priceLabel;
+  final bool isCurrent;
+  final bool highlighted;
+  final VoidCallback? onBuy;
+  final VoidCallback? onDevUnlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: highlighted ? accent : colorScheme.outlineVariant,
+          width: highlighted ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: accent,
+                ),
+              ),
+              if (highlighted) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'BEST VALUE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: accent,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              if (isCurrent)
+                Text(
+                  'Current',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            tagline,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 14),
+          ...features.map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 18, color: accent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(f, style: const TextStyle(height: 1.3)),
+                  ),
+                ],
+              ),
             ),
-          ] else ...[
-            Text(
-              billing.isAvailable
-                  ? 'Subscription products arenʼt available yet. They appear once configured in the Play Console.'
-                  : 'In-app purchases arenʼt available on this device.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: isCurrent ? null : onBuy,
+              style: FilledButton.styleFrom(
+                backgroundColor: accent,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+              child: Text(
+                isCurrent ? 'Your current plan' : 'Choose $title · $priceLabel',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
-            const SizedBox(height: 10),
-            // Dev/testing fallback so the premium UI is reachable before billing
-            // products are live. Remove before production.
-            OutlinedButton(
-              onPressed: () =>
-                  context.read<EntitlementService>().startPremium(),
-              child: const Text('Unlock (testing)'),
+          ),
+          if (onDevUnlock != null)
+            Center(
+              child: TextButton(
+                onPressed: onDevUnlock,
+                child: Text('Unlock $title (testing)'),
+              ),
             ),
-          ],
         ],
       ),
     );
@@ -242,57 +334,39 @@ class _PurchaseActions extends StatelessWidget {
 }
 
 /// Communicates the available payment methods. On Android, the Google Play
-/// checkout sheet offers UPI, cards, net banking and wallets — selected by the
-/// user during purchase. (Play policy requires digital goods to use Play
-/// Billing, so a separate UPI/card gateway is not used.)
+/// checkout sheet offers UPI, cards, net banking and wallets.
 class _PaymentMethodsNote extends StatelessWidget {
   const _PaymentMethodsNote();
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.lock_rounded,
-                size: 13,
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_rounded, size: 13, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text(
+              'Secure payment via Google Play',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
                 color: colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  'Secure payment via Google Play',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'UPI · Cards · Net banking · Wallets',
-            style: TextStyle(
-              fontSize: 11,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
             ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'UPI · Cards · Net banking · Wallets · Cancel anytime',
+          style: TextStyle(
+            fontSize: 11,
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
           ),
-          Text(
-            'Cancel anytime in Google Play subscriptions.',
-            style: TextStyle(
-              fontSize: 10.5,
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

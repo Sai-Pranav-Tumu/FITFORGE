@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/diet_plan_models.dart';
 import '../../providers/diet_plan_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../services/diet_recommender_model.dart';
+import '../../services/entitlement_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/top_app_bar.dart';
+import '../premium/paywall_screen.dart';
 
 class DietPlanScreen extends StatefulWidget {
   const DietPlanScreen({super.key});
@@ -29,7 +32,19 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
   Future<void> _refreshScorerStatus() async {
     await DietRecommenderModel.instance.ensureLoaded();
     if (!mounted) return;
-    setState(() => _modelActive = DietRecommenderModel.instance.isAvailable);
+    // The AI model is a Max feature; otherwise the heuristic scorer is used.
+    setState(
+      () => _modelActive =
+          DietRecommenderModel.instance.isAvailable &&
+          EntitlementService.instance.hasMax,
+    );
+  }
+
+  void _openPaywall(String reason) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const PaywallScreen()));
   }
 
   Future<void> _maybeLoad() async {
@@ -43,12 +58,40 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
   Future<void> _generatePlan() async {
     final user = context.read<UserProvider>().userProfile;
     if (user == null) return;
-    await context.read<DietPlanProvider>().generate(user);
+    final dietProvider = context.read<DietPlanProvider>();
+    final entitlement = context.read<EntitlementService>();
+
+    // Free tier: one diet refresh per week. Pro/Max: unlimited.
+    if (!entitlement.hasPro) {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'free_diet_regen_${user.id}';
+      final lastMs = prefs.getInt(key) ?? 0;
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      const weekMs = 7 * 24 * 60 * 60 * 1000;
+      if (dietProvider.hasPlan && nowMs - lastMs < weekMs) {
+        if (mounted) {
+          _openPaywall(
+            'Free includes one diet refresh per week — upgrade to Pro for unlimited.',
+          );
+        }
+        return;
+      }
+      await prefs.setInt(key, nowMs);
+    }
+
+    await dietProvider.generate(user);
   }
 
   Future<void> _swapMeal(int dayIndex, String slot) async {
     final user = context.read<UserProvider>().userProfile;
     if (user == null) return;
+
+    // Meal swapping is a Pro feature.
+    if (!context.read<EntitlementService>().hasPro) {
+      _openPaywall('Swapping meals is a Pro feature — upgrade to unlock it.');
+      return;
+    }
+
     await context.read<DietPlanProvider>().swapMeal(
       dayIndex: dayIndex,
       slot: slot,

@@ -71,25 +71,13 @@ void main() async {
             return provider;
           },
         ),
-        // Declared before WorkoutProvider so the latter can read logged sets to
-        // adapt the plan to the user's actual performance.
+        // Declared before WorkoutProvider so the latter can read logged sets +
+        // the user's tier to adapt and gate the plan.
         ChangeNotifierProxyProvider<AuthProvider, WorkoutLogProvider>(
           create: (_) => WorkoutLogProvider(),
           update: (_, authProvider, workoutLogProvider) {
             final provider = workoutLogProvider ?? WorkoutLogProvider();
             provider.sync(authProvider.user?.uid);
-            return provider;
-          },
-        ),
-        ChangeNotifierProxyProvider2<
-          UserProvider,
-          WorkoutLogProvider,
-          WorkoutProvider
-        >(
-          create: (_) => WorkoutProvider(),
-          update: (_, userProvider, workoutLogProvider, workoutProvider) {
-            final provider = workoutProvider ?? WorkoutProvider();
-            provider.sync(userProvider.userProfile, workoutLogProvider.logs);
             return provider;
           },
         ),
@@ -100,6 +88,30 @@ void main() async {
             service.sync(authProvider.user?.uid);
             return service;
           },
+        ),
+        ChangeNotifierProxyProvider3<
+          UserProvider,
+          WorkoutLogProvider,
+          EntitlementService,
+          WorkoutProvider
+        >(
+          create: (_) => WorkoutProvider(),
+          update:
+              (
+                _,
+                userProvider,
+                workoutLogProvider,
+                entitlement,
+                workoutProvider,
+              ) {
+                final provider = workoutProvider ?? WorkoutProvider();
+                provider.sync(
+                  userProvider.userProfile,
+                  workoutLogProvider.logs,
+                  entitlement.hasPro,
+                );
+                return provider;
+              },
         ),
         ChangeNotifierProvider<BillingService>.value(
           value: BillingService.instance,

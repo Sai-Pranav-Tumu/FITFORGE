@@ -86,10 +86,21 @@ async function acknowledgeIfNeeded(subscription, productId, purchaseToken) {
   }
 }
 
+// Maps a Play product id to the subscription tier it grants.
+function tierForProduct(productId) {
+  const p = String(productId || "").toLowerCase();
+  if (p.startsWith("max")) return "max";
+  if (p.startsWith("pro")) return "pro";
+  // Legacy single-premium products map to Pro.
+  if (p.includes("premium")) return "pro";
+  return "free";
+}
+
 async function writeEntitlement(uid, productId, purchaseToken, subscription) {
   const active = isActiveState(subscription.subscriptionState);
   const expiryMillis = latestExpiryMillis(subscription);
   const now = admin.firestore.FieldValue.serverTimestamp();
+  const tier = active ? tierForProduct(productId) : "free";
 
   // token -> uid map so RTDN can resolve the user later.
   await db.collection("subscriptions").doc(purchaseToken).set(
@@ -106,6 +117,7 @@ async function writeEntitlement(uid, productId, purchaseToken, subscription) {
   await db.collection("users").doc(uid).set(
     {
       isPremium: active,
+      tier,
       premium: {
         productId,
         purchaseToken,
@@ -117,7 +129,7 @@ async function writeEntitlement(uid, productId, purchaseToken, subscription) {
     { merge: true }
   );
 
-  return { active, expiryMillis };
+  return { active, expiryMillis, tier };
 }
 
 exports.verifyPlayPurchase = onCall(async (request) => {
@@ -143,14 +155,14 @@ exports.verifyPlayPurchase = onCall(async (request) => {
   }
 
   await acknowledgeIfNeeded(subscription, productId, purchaseToken);
-  const { active, expiryMillis } = await writeEntitlement(
+  const { active, expiryMillis, tier } = await writeEntitlement(
     uid,
     productId,
     purchaseToken,
     subscription
   );
 
-  return { isPremium: active, expiryMillis };
+  return { isPremium: active, tier, expiryMillis };
 });
 
 exports.handlePlayRtdn = onMessagePublished(RTDN_TOPIC, async (event) => {

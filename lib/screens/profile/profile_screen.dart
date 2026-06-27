@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -920,9 +921,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _buildSettingsRow(
                 context,
                 Icons.workspace_premium_outlined,
-                context.watch<EntitlementService>().isPremium
-                    ? 'FitForge Premium (active)'
-                    : 'Go Premium',
+                context.watch<EntitlementService>().tier == AppTier.free
+                    ? 'Upgrade your plan'
+                    : 'FitForge ${context.watch<EntitlementService>().tier.label} (active)',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const PaywallScreen(),
@@ -930,6 +931,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 trailing: const Icon(Icons.chevron_right, size: 20),
               ),
+              if (kDebugMode) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      for (final t in AppTier.values)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: OutlinedButton(
+                              onPressed: () => context
+                                  .read<EntitlementService>()
+                                  .setTier(t),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                              ),
+                              child: Text('DEV: ${t.label}'),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               _buildSettingsRow(
                 context,
